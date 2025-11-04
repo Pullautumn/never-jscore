@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use deno_core::{JsRuntime, RuntimeOptions};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -184,10 +184,8 @@ impl Context {
     /// 请求垃圾回收
     fn request_gc(&self) -> Result<()> {
         let mut runtime = self.runtime.borrow_mut();
-        let _ = runtime.execute_script(
-            "<gc_hint>",
-            "if (typeof gc === 'function') { gc(); } null;",
-        );
+        let _ =
+            runtime.execute_script("<gc_hint>", "if (typeof gc === 'function') { gc(); } null;");
         Ok(())
     }
 }

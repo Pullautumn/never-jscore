@@ -1,4 +1,4 @@
-use deno_core::{extension, op2, OpState};
+use deno_core::{OpState, extension, op2};
 use std::rc::Rc;
 
 use crate::storage::ResultStorage;
@@ -14,7 +14,7 @@ pub fn op_store_result(state: &mut OpState, #[string] value: String) {
     }
 }
 
-// PyExecJS 扩展
+// 扩展
 // 注册自定义 ops 到 Deno Core runtime。
 // storage 通过 options 传入，并在 state 初始化时设置。
 extension!(

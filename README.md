@@ -80,10 +80,6 @@ print(ctx.call("greet", ["World"]))   # Hello, World!
 ### 3. 异步支持（Promise/async/await）
 
 ```python
-# Promise 自动等待
-result = execjs.eval("Promise.resolve(42)")
-print(result)  # 42
-
 # async 函数
 ctx = execjs.compile("""
     async function fetchData(id) {
@@ -92,11 +88,17 @@ ctx = execjs.compile("""
     }
 """)
 
+# Promise 自动等待
+result = ctx.eval("Promise.resolve(42)")
+print(result)  # 42
+
+
+
 result = ctx.call("fetchData", [123])
 print(result)  # {'id': 123, 'name': 'User123'}
 
 # Promise 链
-result = execjs.eval("""
+result = ctx.eval("""
     Promise.resolve(10)
         .then(x => x * 2)
         .then(x => x + 5)
@@ -104,7 +106,7 @@ result = execjs.eval("""
 print(result)  # 25
 
 # Promise.all 并发
-result = execjs.eval("""
+result = ctx.eval("""
     Promise.all([
         Promise.resolve(1),
         Promise.resolve(2),
@@ -190,6 +192,35 @@ ctx.gc()
 # 重置统计
 ctx.reset_stats()
 ```
+
+### (注意: execjs只能compile一次,并且compile一次之后不可再直接用execjs调用,应当用返回的实例,要重新compile就要del删除掉已产生的实例对象)
+
+```python
+ctx = execjs.compile("""
+    async function fetchData(id) {
+        return await Promise.resolve({id: id, name: "User" + id});
+    }
+""")
+
+result = ctx.eval("""
+    Promise.all([
+        Promise.resolve(1),
+        Promise.resolve(2),
+        Promise.resolve(3)
+    ])
+""")
+print(result)  # [1, 2, 3]
+
+del ctx
+ctx2 = execjs.compile("""
+    async function new_fetchData(id) {
+        return await Promise.resolve({id: id, name: "User" + id});
+    }
+""")
+result = ctx2.call("new_fetchData", [1234567])
+print(result)  # {'id': 123, 'name': 'User123'}
+```
+
 
 ## API 参考
 

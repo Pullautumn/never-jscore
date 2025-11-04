@@ -1,6 +1,6 @@
 // 简化版异步示例 - 专注于演示功能
 use anyhow::Result;
-use deno_core::{extension, op2, JsRuntime, RuntimeOptions, OpState};
+use deno_core::{JsRuntime, OpState, RuntimeOptions, extension, op2};
 use std::cell::RefCell;
 use std::rc::Rc;
 
