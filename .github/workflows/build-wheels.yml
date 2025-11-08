@@ -17,29 +17,41 @@ env:
   RUSTC_WRAPPER: "sccache"
 
 jobs:
-  # Linux 构建 - 直接在 ubuntu 上构建
+  # Linux 构建
   build_wheels_linux:
     name: Build Linux wheels
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [ '3.11' ]
+        target: [x86_64]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system dependencies
+      - name: Install host dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libffi-dev libssl-dev pkg-config patchelf
+          sudo apt-get install -y \
+            libclang-dev \
+            clang \
+            cmake \
+            build-essential \
+            pkg-config \
+            libssl-dev
+
+      - name: Find and set libclang path
+        run: |
+          LIBCLANG_PATH=$(find /usr/lib -name "libclang.so*" | head -1 | xargs dirname)
+          echo "LIBCLANG_PATH=$LIBCLANG_PATH" >> $GITHUB_ENV
+          echo "Found libclang at: $LIBCLANG_PATH"
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.4
@@ -47,30 +59,52 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          key: linux-${{ matrix.python-version }}
+          key: linux-${{ matrix.target }}
           cache-on-failure: true
 
-      - name: Install maturin
-        run: pip install maturin auditwheel
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: 'true'
+          manylinux: 2_28
+          before-script-linux: |
+            # 检测包管理器并安装依赖
+            if command -v yum &> /dev/null; then
+              echo "Using yum (manylinux container)"
+              yum install -y clang llvm-devel cmake glibc-devel glibc-headers kernel-headers gcc-c++
 
-      - name: Build wheel
-        run: |
-          export V8_FROM_SOURCE=0
-          maturin build --release --strip --out dist
+              # 设置 bindgen 的 clang 参数
+              ARCH=$(uname -m)
+              export BINDGEN_EXTRA_CLANG_ARGS="-I/usr/include -I/usr/include/$ARCH-linux-gnu"
+              echo "BINDGEN_EXTRA_CLANG_ARGS=$BINDGEN_EXTRA_CLANG_ARGS"
+
+              # 查找并设置 libclang
+              export LIBCLANG_PATH="${LIBCLANG_PATH:-$(find /usr/lib* -name "libclang.so*" 2>/dev/null | head -1 | xargs dirname 2>/dev/null || echo "/usr/lib64")}"
+              echo "Using LIBCLANG_PATH=$LIBCLANG_PATH"
+              ls -la $LIBCLANG_PATH/libclang* 2>/dev/null || echo "libclang not found"
+            else
+              echo "Not in manylinux container"
+            fi
+
+            # 设置 V8 相关环境变量
+            export V8_FROM_SOURCE=0
+            export CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+            # 验证工具
+            clang --version 2>/dev/null || echo "clang not in PATH"
         env:
+          V8_FROM_SOURCE: "0"
           RUSTFLAGS: "-C relocation-model=pic -C link-arg=-Wl,-z,notext"
 
-      - name: Repair wheel with auditwheel
-        run: |
-          auditwheel repair dist/*.whl --plat manylinux_2_31_x86_64 -w dist/repaired || cp dist/*.whl dist/repaired/
-          rm dist/*.whl
-          mv dist/repaired/*.whl dist/
-        continue-on-error: true
+      - name: List built wheels
+        run: ls -lh dist/
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: linux-wheels-py${{ matrix.python-version }}
+          name: linux-wheels-${{ matrix.target }}
           path: dist/*.whl
           if-no-files-found: error
 
