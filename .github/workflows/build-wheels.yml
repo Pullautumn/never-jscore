@@ -73,9 +73,6 @@ jobs:
           echo "LIBCLANG_PATH=$LIBCLANG_PATH" >> $GITHUB_ENV
           echo "Found libclang at: $LIBCLANG_PATH"
 
-      - name: Setup sccache (for Rust, not V8)
-        uses: mozilla-actions/sccache-action@v0.0.4
-
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -83,6 +80,10 @@ jobs:
           args: --release --out dist --find-interpreter
           manylinux: 2_28
           before-script-linux: |
+            # sccache 在 manylinux 容器中不可用，需要禁用
+            unset RUSTC_WRAPPER
+            unset SCCACHE_GHA_ENABLED
+
             # 在 manylinux 容器中安装必要工具
             if command -v yum &> /dev/null; then
               echo "=== Installing build dependencies in manylinux container ==="
