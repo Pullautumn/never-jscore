@@ -132,7 +132,7 @@ jobs:
             echo "V8_FROM_SOURCE=$V8_FROM_SOURCE"
             echo "GN_ARGS=$GN_ARGS"
         env:
-          V8_FROM_SOURCE: "1"
+          V8_FROM_SOURCE: "0"
           GN_ARGS: 'extra_cflags=["-DV8_TLS_MODEL=\"global-dynamic\"","-fPIC"] is_clang=true'
           RUSTFLAGS: "-C relocation-model=pic"
 
