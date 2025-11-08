@@ -54,7 +54,8 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --strip --out dist -i python${{ matrix.python-version }}
-          manylinux: auto
+          # 使用 manylinux_2_28 以获得更好的 TLS 和现代链接器支持
+          manylinux: 2_28
           sccache: 'true'
           before-script-linux: |
             # 安装编译依赖
@@ -66,8 +67,8 @@ jobs:
             export V8_FROM_SOURCE=0
             export CARGO_NET_GIT_FETCH_WITH_CLI=true
         env:
-          # 关键：添加链接器标志以支持 V8 的 TLS
-          RUSTFLAGS: "-C link-arg=-Wl,-z,notext"
+          # 修复 V8 TLS 重定位问题的多重标志组合
+          RUSTFLAGS: "-C relocation-model=pic -C link-arg=-Wl,-z,notext -C link-arg=-Wl,--no-as-needed -C link-arg=-lpthread"
           # 禁止从源码编译 V8
           V8_FROM_SOURCE: "0"
 
