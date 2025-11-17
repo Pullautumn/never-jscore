@@ -16,8 +16,19 @@ mod random_state;  // New: Seedable RNG state management
 mod random_ops;     // New: Random seed control operations
 
 use pyo3::prelude::*;
+use std::sync::Once;
 
 use context::Context;
+
+// V8 platform initialization - must happen exactly once
+static INIT: Once = Once::new();
+
+fn ensure_v8_initialized() {
+    INIT.call_once(|| {
+        // Initialize V8 platform (required before creating any isolates)
+        deno_core::JsRuntime::init_platform(None, false);
+    });
+}
 
 /// never_jscore Python 模块
 ///
@@ -46,6 +57,9 @@ use context::Context;
 ///     ```
 #[pymodule]
 fn never_jscore(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Initialize V8 platform when module is first imported
+    ensure_v8_initialized();
+
     // 只导出 Context 类
     // 不提供模块级函数，确保用户必须实例化才能使用
     m.add_class::<Context>()?;

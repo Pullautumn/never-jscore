@@ -1,5 +1,5 @@
 // crypto_ops.rs - Cryptographic operations for JS reverse engineering
-use deno_core::{extension, op2};
+use deno_core::{extension, op2, OpState};
 use base64::prelude::*;
 use md5::Md5;
 use sha1::Sha1;
@@ -174,10 +174,21 @@ pub fn op_hex_decode(#[string] input: String) -> String {
 #[op2]
 #[string]
 /// Generate a random UUID v4
-pub fn op_crypto_random_uuid() -> String {
+pub fn op_crypto_random_uuid(state: &mut OpState) -> String {
+    use rand::RngCore;
+
     // Generate 16 random bytes
     let mut bytes = [0u8; 16];
-    crate::random_state::fill_bytes(&mut bytes);
+
+    if let Some(rng_state) = state.try_borrow_mut::<crate::random_state::RngState>() {
+        if let Some(ref mut rng) = rng_state.seeded_rng {
+            rng.fill_bytes(&mut bytes);
+        } else {
+            rand::thread_rng().fill_bytes(&mut bytes);
+        }
+    } else {
+        rand::thread_rng().fill_bytes(&mut bytes);
+    }
 
     // Set version (4) and variant bits according to RFC 4122
     bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
@@ -197,16 +208,36 @@ pub fn op_crypto_random_uuid() -> String {
 #[op2]
 #[string]
 /// Generate random bytes as hex string (length in bytes)
-pub fn op_crypto_get_random_values(length: u32) -> String {
+pub fn op_crypto_get_random_values(state: &mut OpState, length: u32) -> String {
+    use rand::RngCore;
+
     let mut buf = vec![0u8; length as usize];
-    crate::random_state::fill_bytes(&mut buf);
+
+    if let Some(rng_state) = state.try_borrow_mut::<crate::random_state::RngState>() {
+        if let Some(ref mut rng) = rng_state.seeded_rng {
+            rng.fill_bytes(&mut buf);
+        } else {
+            rand::thread_rng().fill_bytes(&mut buf);
+        }
+    } else {
+        rand::thread_rng().fill_bytes(&mut buf);
+    }
+
     hex::encode(buf)
 }
 
 #[op2(fast)]
 /// Generate a random number between 0 and 1
-pub fn op_crypto_random() -> f64 {
-    crate::random_state::random_f64()
+pub fn op_crypto_random(state: &mut OpState) -> f64 {
+    use rand::Rng;
+
+    if let Some(rng_state) = state.try_borrow_mut::<crate::random_state::RngState>() {
+        if let Some(ref mut rng) = rng_state.seeded_rng {
+            return rng.gen::<f64>();
+        }
+    }
+
+    rand::thread_rng().gen::<f64>()
 }
 
 // ============================================

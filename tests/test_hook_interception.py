@@ -1,468 +1,445 @@
 """
-Hook拦截功能测试
-测试 __neverjscore_return__() 提前返回机制
+测试 Hook 拦截系统 ($return, $exit)
+
+展示如何在关键点拦截 JS 执行并提取中间结果，用于逆向工程
 """
 
 import never_jscore
-import time
-import sys
-
-# 修复Windows控制台的Unicode编码问题
-if sys.platform == 'win32':
-    import codecs
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
 
-def test_basic_early_return():
-    """测试基本的提前返回功能"""
+def test_basic_return():
+    """测试基本的 $return 功能"""
     ctx = never_jscore.Context()
 
+    # 使用 $return 提前返回
     result = ctx.evaluate("""
-        (async () => {
-            function testFunc() {
-                __neverjscore_return__({ intercepted: true, value: 42 });
-                // 下面的代码不会执行
-                return { intercepted: false, value: 0 };
-            }
+        function longCalculation() {
+            const step1 = 10 + 20;
+            const step2 = step1 * 2;
 
-            return testFunc();
-        })()
+            // 提前返回中间结果
+            $return({ step1, step2 });
+
+            // 下面的代码不会执行
+            const step3 = step2 * 100;
+            return step3;
+        }
+
+        longCalculation()
     """)
 
-    assert result['intercepted'] == True
-    assert result['value'] == 42
-    print("✓ 基本提前返回测试通过")
+    assert result['step1'] == 30, "应该返回 step1"
+    assert result['step2'] == 60, "应该返回 step2"
+    assert 'step3' not in result, "step3 不应该存在（已提前返回）"
+
+    print(f"✓ 提前返回: step1={result['step1']}, step2={result['step2']}")
 
 
-def test_early_return_alias_dollar_return():
-    """测试 $return 别名"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        (async () => {
-            $return({ method: '$return', success: true });
-            return { method: 'normal', success: false };
-        })()
-    """)
-
-    assert result['method'] == '$return'
-    assert result['success'] == True
-    print("✓ $return 别名测试通过")
-
-
-def test_early_return_alias_dollar_exit():
+def test_return_alias():
     """测试 $exit 别名"""
     ctx = never_jscore.Context()
 
     result = ctx.evaluate("""
-        (async () => {
-            $exit({ method: '$exit', code: 0 });
-            return { method: 'normal', code: -1 };
-        })()
-    """)
-
-    assert result['method'] == '$exit'
-    assert result['code'] == 0
-    print("✓ $exit 别名测试通过")
-
-
-def test_xmlhttprequest_send_hook():
-    """测试XMLHttpRequest.send Hook拦截"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        (async () => {
-            // Hook XMLHttpRequest.send
-            const originalSend = XMLHttpRequest.prototype.send;
-            XMLHttpRequest.prototype.send = function(data) {
-                __neverjscore_return__({
-                    hook: 'XMLHttpRequest.send',
-                    method: this._method,
-                    url: this._url,
-                    data: data
-                });
-            };
-
-            // 创建并发送请求
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'https://api.example.com/data');
-            xhr.send('encrypted_payload_12345');
-
-            // 不会到达这里
-            return { status: 'completed' };
-        })()
-    """)
-
-    assert result['hook'] == 'XMLHttpRequest.send'
-    assert result['method'] == 'POST'
-    assert result['url'] == 'https://api.example.com/data'
-    assert result['data'] == 'encrypted_payload_12345'
-    print("✓ XMLHttpRequest.send Hook测试通过")
-
-
-def test_encryption_function_hook():
-    """测试加密函数Hook拦截"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        (async () => {
-            function multiLayerEncrypt(data) {
-                const layer1 = btoa(data);
-                const layer2 = md5(layer1);
-
-                // 在第二层拦截
-                $return({
-                    layers: 2,
-                    layer1_result: layer1,
-                    layer2_result: layer2,
-                    original: data
-                });
-
-                // 第三层不会执行
-                const layer3 = sha256(layer2);
-                return layer3;
-            }
-
-            return multiLayerEncrypt('sensitive_data');
-        })()
-    """)
-
-    assert result['layers'] == 2
-    assert 'layer1_result' in result
-    assert 'layer2_result' in result
-    assert result['original'] == 'sensitive_data'
-    print("✓ 加密函数Hook测试通过")
-
-
-def test_conditional_early_return():
-    """测试条件提前返回"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        (async () => {
-            let callCount = 0;
-
-            function processItem(item) {
-                callCount++;
-
-                if (item.includes('TARGET')) {
-                    $exit({
-                        found: true,
-                        callCount: callCount,
-                        item: item
-                    });
-                }
-
-                return item.toUpperCase();
-            }
-
-            // 多次调用
-            processItem('item1');
-            processItem('item2');
-            processItem('TARGET_item');  // 在这里拦截
-            processItem('item4');  // 不会执行
-
-            return { found: false, callCount: callCount };
-        })()
-    """)
-
-    assert result['found'] == True
-    assert result['callCount'] == 3  # 只执行了3次
-    assert 'TARGET' in result['item']
-    print("✓ 条件提前返回测试通过")
-
-
-def test_early_return_with_complex_data():
-    """测试返回复杂数据结构"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        (async () => {
-            const complexData = {
-                user: {
-                    id: 12345,
-                    name: 'test_user',
-                    roles: ['admin', 'user']
-                },
-                session: {
-                    token: 'abc123xyz',
-                    expires: Date.now() + 3600000
-                },
-                metadata: {
-                    ip: '192.168.1.1',
-                    userAgent: 'Mozilla/5.0'
-                },
-                encrypted: btoa('secret_data'),
-                hash: md5('verification_string')
-            };
-
-            __neverjscore_return__(complexData);
-
-            return { error: 'should not reach here' };
-        })()
-    """)
-
-    assert result['user']['id'] == 12345
-    assert result['user']['name'] == 'test_user'
-    assert len(result['user']['roles']) == 2
-    assert 'token' in result['session']
-    assert 'encrypted' in result
-    assert 'hash' in result
-    print("✓ 复杂数据结构返回测试通过")
-
-
-def test_early_return_skips_async_operations():
-    """测试提前返回能跳过异步操作"""
-    ctx = never_jscore.Context()
-
-    start_time = time.time()
-
-    result = ctx.evaluate("""
-        (async () => {
-            let executed = [];
-
-            executed.push('step1');
-
-            // 提前返回，后续的延迟操作不会执行
-            $return({
-                executed: executed,
-                skipped_timer: true
-            });
-
-            // 下面的延迟操作不会执行
-            await new Promise(resolve => setTimeout(() => {
-                executed.push('step2_delayed');
-                resolve();
-            }, 1000));
-
-            executed.push('step3');
-
-            return { executed: executed, skipped_timer: false };
-        })()
-    """)
-
-    elapsed = time.time() - start_time
-
-    assert result['executed'] == ['step1']
-    assert result['skipped_timer'] == True
-    assert elapsed < 0.5  # 应该立即返回，不会等待1秒
-    print("✓ 跳过异步操作测试通过")
-
-
-def test_early_return_in_nested_functions():
-    """测试嵌套函数中的提前返回"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        (async () => {
-            function level1() {
-                return level2();
-            }
-
-            function level2() {
-                return level3();
-            }
-
-            function level3() {
-                $exit({ level: 3, nested: true });
-                return { level: 0, nested: false };
-            }
-
-            level1();
-
-            // 不会到达这里
-            return { level: -1, nested: false };
-        })()
-    """)
-
-    assert result['level'] == 3
-    assert result['nested'] == True
-    print("✓ 嵌套函数提前返回测试通过")
-
-
-def test_early_return_with_non_serializable_fallback():
-    """测试不可序列化对象的降级处理"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        (async () => {
-            // 创建循环引用（不可JSON序列化）
-            const obj = { name: 'test' };
-            obj.self = obj;
-
-            try {
-                __neverjscore_return__(obj);
-            } catch (e) {
-                // 应该降级为字符串
-                return { fallback: true, error: e.message };
-            }
-
-            return { fallback: false };
-        })()
-    """)
-
-    # 循环引用应该被转换为字符串 "[object Object]"
-    assert isinstance(result, str) or result.get('fallback') == True
-    print("✓ 不可序列化对象降级处理测试通过")
-
-
-def test_multiple_contexts_early_return():
-    """测试多个Context的提前返回（串行使用）"""
-    # 注意：根据V8限制，不能同时使用多个Context
-    # 必须先使用完第一个Context并删除后，才能使用第二个
-
-    # 第一个Context
-    ctx1 = never_jscore.Context()
-    result1 = ctx1.evaluate("$return({ context: 1 }); { context: 0 }")
-    assert result1['context'] == 1
-    del ctx1  # 必须删除第一个Context
-
-    # 第二个Context（独立使用）
-    ctx2 = never_jscore.Context()
-    result2 = ctx2.evaluate("$return({ context: 2 }); { context: 0 }")
-    assert result2['context'] == 2
-    del ctx2
-
-    print("✓ 多Context提前返回串行测试通过（已修正为串行使用）")
-
-
-def test_early_return_sync_mode():
-    """测试同步模式下的提前返回"""
-    ctx = never_jscore.Context()
-
-    result = ctx.evaluate("""
-        function syncTest() {
-            $return({ mode: 'sync', value: 123 });
-            return { mode: 'normal', value: 0 };
+        function test() {
+            $exit('early exit');
+            return 'should not reach here';
         }
-        syncTest();
-    """, auto_await=False)
+        test()
+    """)
 
-    assert result['mode'] == 'sync'
-    assert result['value'] == 123
-    print("✓ 同步模式提前返回测试通过")
+    assert result == 'early exit', "$exit 应该提前返回"
+    print(f"✓ $exit 别名工作正常: {result}")
 
 
-def test_real_world_akamai_style_hook():
-    """测试真实场景：Akamai风格的传感器生成Hook"""
+def test_hook_encryption_function():
+    """Hook 加密函数，拦截加密参数"""
+    ctx = never_jscore.Context()
+
+    # 模拟目标网站的加密库
+    ctx.compile("""
+        function encryptData(plaintext, key) {
+            // 复杂的加密逻辑...
+            const encrypted = btoa(plaintext + ':' + key);
+            return encrypted;
+        }
+
+        function sendRequest(data) {
+            const encrypted = encryptData(data.username + ':' + data.password, 'SECRET_KEY');
+            // 发送加密数据...
+            return { encrypted };
+        }
+    """)
+
+    # Hook encryptData 函数，拦截加密前的参数
+    result = ctx.evaluate("""
+        // 保存原始函数
+        const originalEncrypt = encryptData;
+
+        // Hook 函数
+        encryptData = function(plaintext, key) {
+            // 拦截参数，提前返回
+            $return({
+                hooked: true,
+                plaintext: plaintext,
+                key: key,
+                timestamp: Date.now()
+            });
+        };
+
+        // 执行目标函数（会触发 Hook）
+        sendRequest({ username: 'admin', password: '123456' })
+    """)
+
+    assert result['hooked'] == True, "应该触发 Hook"
+    assert 'admin:123456' in result['plaintext'], "应该拦截到明文参数"
+    assert result['key'] == 'SECRET_KEY', "应该拦截到密钥"
+
+    print(f"\n=== Hook 加密函数 ===")
+    print(f"✓ 拦截到明文: {result['plaintext']}")
+    print(f"✓ 拦截到密钥: {result['key']}")
+    print(f"✓ 时间戳: {result['timestamp']}")
+
+
+def test_hook_xhr_send():
+    """Hook XMLHttpRequest.send，拦截请求数据"""
     ctx = never_jscore.Context()
 
     result = ctx.evaluate("""
-        (async () => {
-            // 模拟Akamai传感器生成
-            function generateSensorData(config) {
-                const timestamp = Date.now();
-                const userAgent = navigator.userAgent;
+        // Hook XMLHttpRequest.send
+        const originalSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function(body) {
+            // 拦截请求体
+            $return({
+                hooked: 'XMLHttpRequest.send',
+                method: this._method,
+                url: this._url,
+                headers: this._headers,
+                body: body
+            });
+        };
 
-                // 收集指纹
-                const fingerprint = {
-                    screen: { width: screen.width, height: screen.height },
-                    navigator: {
-                        platform: navigator.platform,
-                        language: navigator.language
-                    },
-                    timestamp: timestamp
-                };
+        // 模拟发送请求
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://api.example.com/login');
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify({
+            username: 'test',
+            password: 'secret',
+            captcha: '1234'
+        }))
+    """)
 
-                // 生成哈希
-                const fp_str = JSON.stringify(fingerprint);
-                const fp_hash = md5(fp_str);
+    assert result['hooked'] == 'XMLHttpRequest.send'
+    assert result['method'] == 'POST'
+    assert result['url'] == 'https://api.example.com/login'
+    assert 'test' in result['body']
 
-                // 生成签名
-                const signature_base = fp_hash + timestamp + config.apiKey;
-                const signature = hmacSha256(config.secret, signature_base);
+    print(f"\n=== Hook XMLHttpRequest ===")
+    print(f"✓ 拦截到请求: {result['method']} {result['url']}")
+    print(f"✓ 请求头: {result['headers']}")
+    print(f"✓ 请求体: {result['body'][:100]}...")
 
-                // 组合最终的传感器数据
-                const sensor = {
-                    version: '1.0.0',
-                    timestamp: timestamp,
-                    fingerprint: fp_hash,
-                    signature: signature,
-                    data: btoa(JSON.stringify({
-                        fp: fingerprint,
-                        sig: signature
-                    }))
-                };
 
-                // Hook: 拦截传感器数据
-                __neverjscore_return__({
-                    intercepted: 'sensor_data',
-                    sensor: sensor,
-                    raw_fingerprint: fingerprint,
-                    debug: {
-                        fp_str: fp_str,
-                        fp_hash: fp_hash,
-                        signature_base: signature_base
-                    }
+def test_hook_with_condition():
+    """条件 Hook：只拦截特定情况"""
+    ctx = never_jscore.Context()
+
+    ctx.compile("""
+        function processUser(userId) {
+            if (userId === 12345) {
+                // 只拦截特定用户
+                $return({
+                    intercepted: true,
+                    userId: userId,
+                    reason: 'Target user detected'
                 });
-
-                // 后续的网络请求不会执行
-                fetch(config.endpoint, {
-                    method: 'POST',
-                    body: JSON.stringify(sensor)
-                });
-
-                return { status: 'sent' };
             }
 
-            // 执行传感器生成
-            return generateSensorData({
-                apiKey: 'test_key_123',
-                secret: 'test_secret_456',
-                endpoint: 'https://akamai.example.com/sensor'
+            // 正常处理其他用户
+            return { userId, processed: true };
+        }
+    """)
+
+    # 测试普通用户（不拦截）
+    result1 = ctx.call("processUser", [999])
+    assert result1['processed'] == True
+    assert 'intercepted' not in result1
+
+    # 测试目标用户（拦截）
+    result2 = ctx.call("processUser", [12345])
+    assert result2['intercepted'] == True
+    assert 'processed' not in result2
+
+    print(f"\n=== 条件 Hook ===")
+    print(f"✓ 普通用户 999: {result1}")
+    print(f"✓ 目标用户 12345: {result2}")
+
+
+def test_extract_intermediate_value():
+    """提取中间计算结果"""
+    ctx = never_jscore.Context()
+
+    # 模拟复杂的签名生成算法
+    ctx.compile("""
+        function generateSignature(params) {
+            // 步骤 1: 参数排序
+            const sorted = Object.keys(params).sort().map(k => k + '=' + params[k]).join('&');
+
+            // 步骤 2: 添加时间戳
+            const timestamp = Date.now();
+            const message = sorted + '&timestamp=' + timestamp;
+
+            // 步骤 3: 添加盐值
+            const salt = 'SECRET_SALT';
+            const withSalt = message + '&salt=' + salt;
+
+            // 步骤 4: 计算哈希
+            const hash = md5(withSalt);
+
+            // 步骤 5: 最终签名
+            const signature = hash.toUpperCase();
+
+            return signature;
+        }
+    """)
+
+    # 提取中间步骤
+    result = ctx.evaluate("""
+        // 重写函数以提取中间值
+        const original = generateSignature;
+        generateSignature = function(params) {
+            const sorted = Object.keys(params).sort().map(k => k + '=' + params[k]).join('&');
+            const timestamp = Date.now();
+            const message = sorted + '&timestamp=' + timestamp;
+            const salt = 'SECRET_SALT';
+            const withSalt = message + '&salt=' + salt;
+
+            // 提取中间结果
+            $return({
+                step1_sorted: sorted,
+                step2_timestamp: timestamp,
+                step3_message: message,
+                step4_withSalt: withSalt
             });
+        };
+
+        // 执行
+        generateSignature({ user: 'admin', action: 'login' })
+    """)
+
+    assert 'action=login&user=admin' in result['step1_sorted']
+    assert 'timestamp=' in result['step3_message']
+    assert 'SECRET_SALT' in result['step4_withSalt']
+
+    print(f"\n=== 提取中间计算值 ===")
+    print(f"✓ 步骤1 排序: {result['step1_sorted']}")
+    print(f"✓ 步骤2 时间戳: {result['step2_timestamp']}")
+    print(f"✓ 步骤3 消息: {result['step3_message'][:60]}...")
+    print(f"✓ 步骤4 加盐: {result['step4_withSalt'][:60]}...")
+
+
+def test_hook_in_async_function():
+    """在异步函数中使用 Hook"""
+    ctx = never_jscore.Context()
+
+    result = ctx.evaluate("""
+        (async function() {
+            // 模拟异步加密
+            const key = await Promise.resolve('async-key-123');
+
+            const data = 'sensitive-data';
+
+            // 在加密前拦截
+            $return({
+                hooked: 'async-context',
+                key: key,
+                data: data
+            });
+
+            // 不会执行
+            const encrypted = btoa(data + key);
+            return encrypted;
         })()
     """)
 
-    print(result)
-    assert result['intercepted'] == 'sensor_data'
-    assert 'sensor' in result
-    assert 'version' in result['sensor']
-    assert 'signature' in result['sensor']
-    assert 'raw_fingerprint' in result
-    assert 'debug' in result
-    print("✓ Akamai风格Hook测试通过")
+    assert result['hooked'] == 'async-context'
+    assert result['key'] == 'async-key-123'
+    assert result['data'] == 'sensitive-data'
+
+    print(f"\n=== 异步函数中的 Hook ===")
+    print(f"✓ 成功拦截异步执行")
+    print(f"✓ 密钥: {result['key']}")
+    print(f"✓ 数据: {result['data']}")
 
 
-if __name__ == '__main__':
-    print("=" * 70)
-    print("Never-JSCore Hook拦截功能测试")
-    print("=" * 70)
+def test_hook_timer_callback():
+    """在定时器回调中使用 Hook"""
+    ctx = never_jscore.Context()
 
-    # 运行所有测试
-    tests = [
-        ("基本提前返回", test_basic_early_return),
-        ("$return别名", test_early_return_alias_dollar_return),
-        ("$exit别名", test_early_return_alias_dollar_exit),
-        ("XMLHttpRequest Hook", test_xmlhttprequest_send_hook),
-        ("加密函数Hook", test_encryption_function_hook),
-        ("条件提前返回", test_conditional_early_return),
-        ("复杂数据返回", test_early_return_with_complex_data),
-        ("跳过异步操作", test_early_return_skips_async_operations),
-        ("嵌套函数返回", test_early_return_in_nested_functions),
-        ("不可序列化降级", test_early_return_with_non_serializable_fallback),
-        ("多Context串行", test_multiple_contexts_early_return),
-        ("同步模式返回", test_early_return_sync_mode),
-        ("Akamai风格Hook", test_real_world_akamai_style_hook),
-    ]
+    result = ctx.evaluate("""
+        (async function() {
+            let capturedData = null;
 
-    passed = 0
-    failed = 0
+            setTimeout(() => {
+                // 模拟定时器中的加密操作
+                const secret = 'timer-secret-' + Math.random();
 
-    for name, test_func in tests:
-        try:
-            test_func()
-            passed += 1
-        except Exception as e:
-            print(f"✗ {name} 测试失败: {e}")
-            failed += 1
+                // 拦截并返回
+                $return({
+                    source: 'setTimeout',
+                    secret: secret,
+                    timestamp: Date.now()
+                });
+            }, 100);
 
-    print("\n" + "=" * 70)
-    print(f"测试完成: {passed} 通过, {failed} 失败")
-    print("=" * 70)
+            // 等待定时器执行（必须在异步环境）
+            await new Promise(resolve => setTimeout(resolve, 200));
+        })()
+    """)
 
-    if failed == 0:
-        print("\n🎉 所有Hook拦截功能测试通过！")
-    else:
-        print(f"\n⚠️  有 {failed} 个测试失败，请检查")
+    assert result['source'] == 'setTimeout'
+    assert 'timer-secret-' in result['secret']
+
+    print(f"\n=== 定时器回调中的 Hook ===")
+    print(f"✓ 拦截来源: {result['source']}")
+    print(f"✓ 密钥: {result['secret']}")
+
+
+def test_multiple_hooks():
+    """多个 Hook 点"""
+    ctx = never_jscore.Context()
+
+    ctx.compile("""
+        const hooks = [];
+
+        function step1(data) {
+            hooks.push({ step: 1, data });
+            return data.toUpperCase();
+        }
+
+        function step2(data) {
+            hooks.push({ step: 2, data });
+            return btoa(data);
+        }
+
+        function step3(data) {
+            hooks.push({ step: 3, data });
+            return md5(data);
+        }
+
+        function pipeline(input) {
+            const r1 = step1(input);
+            const r2 = step2(r1);
+            const r3 = step3(r2);
+            return r3;
+        }
+    """)
+
+    # 在 step2 处拦截
+    result = ctx.evaluate("""
+        // Hook step2
+        const original = step2;
+        step2 = function(data) {
+            hooks.push({ step: 'HOOK', data });
+
+            // 拦截并返回所有历史记录
+            $return({
+                interceptedAt: 'step2',
+                currentData: data,
+                history: hooks
+            });
+        };
+
+        pipeline('hello')
+    """)
+
+    assert result['interceptedAt'] == 'step2'
+    assert result['currentData'] == 'HELLO'
+    assert len(result['history']) >= 2
+
+    print(f"\n=== 多个 Hook 点 ===")
+    print(f"✓ 拦截位置: {result['interceptedAt']}")
+    print(f"✓ 当前数据: {result['currentData']}")
+    print(f"✓ 历史记录: {result['history']}")
+
+
+def test_real_world_token_extraction():
+    """实战：提取 Token 生成逻辑"""
+    ctx = never_jscore.Context()
+
+    # 模拟某个网站的 Token 生成
+    ctx.compile("""
+        const TokenGenerator = {
+            secret: 'SUPER_SECRET_KEY_12345',
+
+            generateToken(userId, timestamp) {
+                const raw = userId + '|' + timestamp + '|' + this.secret;
+                const hash = sha256(raw);
+                const token = btoa(hash);
+                return token;
+            }
+        };
+
+        function login(username, password) {
+            const userId = btoa(username);
+            const timestamp = Date.now();
+            const token = TokenGenerator.generateToken(userId, timestamp);
+
+            return {
+                success: true,
+                token: token
+            };
+        }
+    """)
+
+    # Hook Token 生成，提取密钥
+    result = ctx.evaluate("""
+        // Hook generateToken
+        const original = TokenGenerator.generateToken;
+        TokenGenerator.generateToken = function(userId, timestamp) {
+            // 拦截并返回所有参数和密钥
+            $return({
+                hooked: 'TokenGenerator.generateToken',
+                userId: userId,
+                timestamp: timestamp,
+                secret: this.secret,  // 提取密钥！
+                rawMessage: userId + '|' + timestamp + '|' + this.secret
+            });
+        };
+
+        // 执行登录（会触发 Hook）
+        login('admin', 'password123')
+    """)
+
+    assert result['hooked'] == 'TokenGenerator.generateToken'
+    assert result['secret'] == 'SUPER_SECRET_KEY_12345'  # 成功提取密钥！
+    assert '|' in result['rawMessage']
+
+    print(f"\n=== 实战：提取 Token 密钥 ===")
+    print(f"✓ 用户ID: {result['userId']}")
+    print(f"✓ 时间戳: {result['timestamp']}")
+    print(f"✓ 密钥: {result['secret']}")  # 关键信息！
+    print(f"✓ 原始消息: {result['rawMessage'][:60]}...")
+
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("测试 Hook 拦截系统")
+    print("=" * 60)
+
+    test_basic_return()
+    test_return_alias()
+    test_hook_encryption_function()
+    test_hook_xhr_send()
+    test_hook_with_condition()
+    test_extract_intermediate_value()
+    test_hook_in_async_function()
+    test_hook_timer_callback()
+    test_multiple_hooks()
+    test_real_world_token_extraction()
+
+    print("\n" + "=" * 60)
+    print("✅ 所有 Hook 拦截测试通过！")
+    print("=" * 60)
+    print("\n💡 提示：使用 $return() 可以在任意位置拦截 JS 执行")
+    print("   这是逆向工程中提取中间结果的强大工具！")

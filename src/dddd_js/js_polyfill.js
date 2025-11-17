@@ -2,6 +2,29 @@
 // 自动注入到 never_jscore 运行时环境
 
 // ============================================
+// Browser Environment Protection (最优先加载)
+// ============================================
+
+// 保存原始 Deno 对象供内部使用
+const __internalDeno = (typeof Deno !== 'undefined' && Deno !== null && Deno !== undefined) ? globalThis.Deno : null;
+
+// 隐藏 Deno 特征
+if (__internalDeno) {
+    delete globalThis.Deno;
+    Object.defineProperty(globalThis, 'Deno', {
+        value: undefined,
+        writable: false,
+        enumerable: false,
+        configurable: false
+    });
+}
+
+// 安全访问内部 Deno 对象
+globalThis.__getDeno = function() {
+    return __internalDeno;
+};
+
+// ============================================
 // Logging utility (必须在最前面定义)
 // ============================================
 
@@ -22,11 +45,11 @@ log('never-jscore polyfill loading...');
 // ============================================
 
 // Override Math.random() to use op_crypto_random (which supports seeding)
-if (typeof Math !== 'undefined' && typeof Deno !== 'undefined' && Deno.core.ops.op_crypto_random) {
+if (typeof Math !== 'undefined' && __internalDeno && __internalDeno.core.ops.op_crypto_random) {
     const originalMathRandom = Math.random;
     Math.random = function() {
         try {
-            return Deno.core.ops.op_crypto_random();
+            return __getDeno().core.ops.op_crypto_random();
         } catch (e) {
             // Fallback to original if op fails
             return originalMathRandom.call(Math);
@@ -37,7 +60,7 @@ if (typeof Math !== 'undefined' && typeof Deno !== 'undefined' && Deno.core.ops.
 
 // Expose cryptoRandom as alias
 globalThis.cryptoRandom = function() {
-    return Deno.core.ops.op_crypto_random();
+    return __getDeno().core.ops.op_crypto_random();
 };
 
 // ============================================
@@ -50,7 +73,7 @@ globalThis.cryptoRandom = function() {
  * @returns {string} Base64 编码结果
  */
 function btoa(str) {
-    return Deno.core.ops.op_base64_encode(String(str));
+    return __getDeno().core.ops.op_base64_encode(String(str));
 }
 
 /**
@@ -59,7 +82,7 @@ function btoa(str) {
  * @returns {string} 解码结果
  */
 function atob(str) {
-    return Deno.core.ops.op_base64_decode(String(str));
+    return __getDeno().core.ops.op_base64_decode(String(str));
 }
 
 // ============================================
@@ -72,7 +95,7 @@ function atob(str) {
  * @returns {string} MD5 哈希值（hex）
  */
 function md5(str) {
-    return Deno.core.ops.op_md5(String(str));
+    return __getDeno().core.ops.op_md5(String(str));
 }
 
 /**
@@ -81,7 +104,7 @@ function md5(str) {
  * @returns {string} SHA1 哈希值（hex）
  */
 function sha1(str) {
-    return Deno.core.ops.op_sha1(String(str));
+    return __getDeno().core.ops.op_sha1(String(str));
 }
 
 /**
@@ -90,7 +113,7 @@ function sha1(str) {
  * @returns {string} SHA256 哈希值（hex）
  */
 function sha256(str) {
-    return Deno.core.ops.op_sha256(String(str));
+    return __getDeno().core.ops.op_sha256(String(str));
 }
 
 /**
@@ -99,7 +122,7 @@ function sha256(str) {
  * @returns {string} SHA512 哈希值（hex）
  */
 function sha512(str) {
-    return Deno.core.ops.op_sha512(String(str));
+    return __getDeno().core.ops.op_sha512(String(str));
 }
 
 // ============================================
@@ -113,7 +136,7 @@ function sha512(str) {
  * @returns {string} HMAC 值（hex）
  */
 function hmacMd5(key, message) {
-    return Deno.core.ops.op_hmac_md5(String(key), String(message));
+    return __getDeno().core.ops.op_hmac_md5(String(key), String(message));
 }
 
 /**
@@ -123,7 +146,7 @@ function hmacMd5(key, message) {
  * @returns {string} HMAC 值（hex）
  */
 function hmacSha1(key, message) {
-    return Deno.core.ops.op_hmac_sha1(String(key), String(message));
+    return __getDeno().core.ops.op_hmac_sha1(String(key), String(message));
 }
 
 /**
@@ -133,7 +156,7 @@ function hmacSha1(key, message) {
  * @returns {string} HMAC 值（hex）
  */
 function hmacSha256(key, message) {
-    return Deno.core.ops.op_hmac_sha256(String(key), String(message));
+    return __getDeno().core.ops.op_hmac_sha256(String(key), String(message));
 }
 
 // ============================================
@@ -146,7 +169,7 @@ function hmacSha256(key, message) {
  * @returns {string} Hex 编码结果
  */
 function hexEncode(str) {
-    return Deno.core.ops.op_hex_encode(String(str));
+    return __getDeno().core.ops.op_hex_encode(String(str));
 }
 
 /**
@@ -155,7 +178,7 @@ function hexEncode(str) {
  * @returns {string} 解码结果
  */
 function hexDecode(str) {
-    return Deno.core.ops.op_hex_decode(String(str));
+    return __getDeno().core.ops.op_hex_decode(String(str));
 }
 
 // ============================================
@@ -168,7 +191,7 @@ function hexDecode(str) {
  * @returns {string} URL 编码结果
  */
 function urlEncode(str) {
-    return Deno.core.ops.op_url_encode(String(str));
+    return __getDeno().core.ops.op_url_encode(String(str));
 }
 
 /**
@@ -177,7 +200,7 @@ function urlEncode(str) {
  * @returns {string} 解码结果
  */
 function urlDecode(str) {
-    return Deno.core.ops.op_url_decode(String(str));
+    return __getDeno().core.ops.op_url_decode(String(str));
 }
 
 /**
@@ -188,7 +211,7 @@ function urlDecode(str) {
  */
 if (typeof encodeURIComponent === 'undefined') {
     globalThis.encodeURIComponent = function(str) {
-        return Deno.core.ops.op_encode_uri_component(String(str));
+        return __getDeno().core.ops.op_encode_uri_component(String(str));
     };
 }
 
@@ -200,7 +223,7 @@ if (typeof encodeURIComponent === 'undefined') {
  */
 if (typeof decodeURIComponent === 'undefined') {
     globalThis.decodeURIComponent = function(str) {
-        return Deno.core.ops.op_decode_uri_component(String(str));
+        return __getDeno().core.ops.op_decode_uri_component(String(str));
     };
 }
 
@@ -212,7 +235,7 @@ if (typeof decodeURIComponent === 'undefined') {
  */
 if (typeof encodeURI === 'undefined') {
     globalThis.encodeURI = function(str) {
-        return Deno.core.ops.op_encode_uri(String(str));
+        return __getDeno().core.ops.op_encode_uri(String(str));
     };
 }
 
@@ -224,7 +247,7 @@ if (typeof encodeURI === 'undefined') {
  */
 if (typeof decodeURI === 'undefined') {
     globalThis.decodeURI = function(str) {
-        return Deno.core.ops.op_decode_uri_component(String(str));
+        return __getDeno().core.ops.op_decode_uri_component(String(str));
     };
 }
 
@@ -397,10 +420,10 @@ globalThis.__neverjscore_return__ = function(value) {
     // 调用 Rust op, 存储值并标记早期返回
     try {
         const json = JSON.stringify(value);
-        Deno.core.ops.op_early_return(json);
+        __getDeno().core.ops.op_early_return(json);
     } catch (e) {
         // 如果无法序列化，转为字符串
-        Deno.core.ops.op_early_return(JSON.stringify(String(value)));
+        __getDeno().core.ops.op_early_return(JSON.stringify(String(value)));
     }
 
     // 抛出错误来中断执行
@@ -434,7 +457,7 @@ const __timer_callbacks__ = new Map();
 globalThis.__neverjscore_clear_all_timers__ = function() {
     log('[EARLY EXIT] Clearing all active timers');
     for (const id of __active_timers__) {
-        Deno.core.ops.op_clear_timer(id);
+        __getDeno().core.ops.op_clear_timer(id);
     }
     __active_timers__.clear();
     __timer_callbacks__.clear();
@@ -442,7 +465,7 @@ globalThis.__neverjscore_clear_all_timers__ = function() {
 
 if (typeof setTimeout === 'undefined') {
     globalThis.setTimeout = function(callback, delay = 0, ...args) {
-        const timerId = Deno.core.ops.op_get_timer_id();
+        const timerId = __getDeno().core.ops.op_get_timer_id();
         log(`setTimeout called: id=${timerId}, delay=${delay}ms`);
 
         // Track active timer
@@ -450,7 +473,7 @@ if (typeof setTimeout === 'undefined') {
         __timer_callbacks__.set(timerId, callback);
 
         // Call async Rust op - returns a Promise that resolves after delay
-        Deno.core.ops.op_set_timeout_real(timerId, Math.max(0, delay)).then(shouldExecute => {
+        __getDeno().core.ops.op_set_timeout_real(timerId, Math.max(0, delay)).then(shouldExecute => {
             // Check if system has exited
             if (globalThis.__neverjscore_exited__) {
                 __active_timers__.delete(timerId);
@@ -480,7 +503,7 @@ if (typeof setTimeout === 'undefined') {
     };
 
     globalThis.setInterval = function(callback, delay = 0, ...args) {
-        const timerId = Deno.core.ops.op_get_timer_id();
+        const timerId = __getDeno().core.ops.op_get_timer_id();
         log(`setInterval called: id=${timerId}, delay=${delay}ms`);
 
         // Track active timer
@@ -496,7 +519,7 @@ if (typeof setTimeout === 'undefined') {
                 return;
             }
 
-            Deno.core.ops.op_set_interval_real(timerId, Math.max(0, delay)).then(shouldExecute => {
+            __getDeno().core.ops.op_set_interval_real(timerId, Math.max(0, delay)).then(shouldExecute => {
                 // Check again after waiting
                 if (!__active_timers__.has(timerId) || globalThis.__neverjscore_exited__) {
                     __active_timers__.delete(timerId);
@@ -536,7 +559,7 @@ if (typeof setTimeout === 'undefined') {
         if (id !== undefined && id !== null) {
             __active_timers__.delete(id);
             __timer_callbacks__.delete(id);
-            Deno.core.ops.op_clear_timer(id);
+            __getDeno().core.ops.op_clear_timer(id);
         }
     };
 
@@ -545,7 +568,7 @@ if (typeof setTimeout === 'undefined') {
         if (id !== undefined && id !== null) {
             __active_timers__.delete(id);
             __timer_callbacks__.delete(id);
-            Deno.core.ops.op_clear_timer(id);
+            __getDeno().core.ops.op_clear_timer(id);
         }
     };
 
@@ -652,8 +675,8 @@ if (typeof process === 'undefined' || !process.version) {
     // 读取所有环境变量
     let envVars = {};
     try {
-        if (typeof Deno !== 'undefined' && Deno.core.ops.op_getenv_all) {
-            envVars = JSON.parse(Deno.core.ops.op_getenv_all());
+        if (__internalDeno && __getDeno().core.ops.op_getenv_all) {
+            envVars = JSON.parse(__getDeno().core.ops.op_getenv_all());
         }
     } catch (e) {
         log('Failed to read environment variables:', e);
@@ -669,8 +692,8 @@ if (typeof process === 'undefined' || !process.version) {
             modules: '120',
             openssl: '3.0.10'
         },
-        platform: (typeof Deno !== 'undefined' && typeof Deno.build !== 'undefined')
-            ? Deno.build.os
+        platform: (__internalDeno && typeof __internalDeno.build !== 'undefined')
+            ? __internalDeno.build.os
             : 'win32',
         arch: 'x64',
         env: envVars,  // 使用真实的环境变量
@@ -682,9 +705,9 @@ if (typeof process === 'undefined' || !process.version) {
         title: 'node',
 
         cwd: function() {
-            if (typeof Deno !== 'undefined' && Deno.core.ops.op_fs_cwd) {
+            if (__internalDeno && __getDeno().core.ops.op_fs_cwd) {
                 try {
-                    return Deno.core.ops.op_fs_cwd();
+                    return __getDeno().core.ops.op_fs_cwd();
                 } catch (e) {
                     log('Failed to get cwd from op:', e);
                 }
@@ -1072,7 +1095,7 @@ if (typeof crypto === 'undefined') {
 
 if (!crypto.randomUUID) {
     crypto.randomUUID = function() {
-        return Deno.core.ops.op_crypto_random_uuid();
+        return __getDeno().core.ops.op_crypto_random_uuid();
     };
 }
 
@@ -1080,7 +1103,7 @@ if (!crypto.getRandomValues) {
     crypto.getRandomValues = function(typedArray) {
         // Generate random hex string and fill typed array
         const length = typedArray.length;
-        const hexString = Deno.core.ops.op_crypto_get_random_values(length);
+        const hexString = __getDeno().core.ops.op_crypto_get_random_values(length);
 
         for (let i = 0; i < length; i++) {
             const hex = hexString.substr(i * 2, 2);
@@ -1248,7 +1271,7 @@ if (typeof fetch === 'undefined') {
         };
 
         // 调用 Rust op
-        const responseJson = Deno.core.ops.op_fetch(url, JSON.stringify(fetchOptions));
+        const responseJson = __getDeno().core.ops.op_fetch(url, JSON.stringify(fetchOptions));
         const responseData = JSON.parse(responseJson);
 
         // 检查错误
@@ -1281,7 +1304,7 @@ if (typeof fetch === 'undefined') {
  */
 const fs = {
     readFileSync: function(path, encoding = 'utf8') {
-        const content = Deno.core.ops.op_read_file_sync(path);
+        const content = __getDeno().core.ops.op_read_file_sync(path);
         if (content.startsWith('Error:')) {
             throw new Error(content);
         }
@@ -1289,25 +1312,25 @@ const fs = {
     },
 
     writeFileSync: function(path, content) {
-        const result = Deno.core.ops.op_write_file_sync(path, String(content));
+        const result = __getDeno().core.ops.op_write_file_sync(path, String(content));
         if (result !== 'OK') {
             throw new Error(result);
         }
     },
 
     existsSync: function(path) {
-        return Deno.core.ops.op_file_exists(path);
+        return __getDeno().core.ops.op_file_exists(path);
     },
 
     statSync: function(path) {
         return {
-            isFile: () => Deno.core.ops.op_is_file(path),
-            isDirectory: () => Deno.core.ops.op_is_directory(path)
+            isFile: () => __getDeno().core.ops.op_is_file(path),
+            isDirectory: () => __getDeno().core.ops.op_is_directory(path)
         };
     },
 
     readdirSync: function(path) {
-        const result = Deno.core.ops.op_readdir(path);
+        const result = __getDeno().core.ops.op_readdir(path);
         if (result.startsWith('Error:')) {
             throw new Error(result);
         }
@@ -1321,33 +1344,33 @@ const fs = {
 const path = {
     resolve: function(...paths) {
         if (paths.length === 0) {
-            return Deno.core.ops.op_getcwd();
+            return __getDeno().core.ops.op_getcwd();
         }
         let resolved = paths[0];
         for (let i = 1; i < paths.length; i++) {
-            resolved = Deno.core.ops.op_join_path(resolved, paths[i]);
+            resolved = __getDeno().core.ops.op_join_path(resolved, paths[i]);
         }
-        return Deno.core.ops.op_resolve_path(resolved);
+        return __getDeno().core.ops.op_resolve_path(resolved);
     },
 
     join: function(...paths) {
         let result = paths[0] || '';
         for (let i = 1; i < paths.length; i++) {
-            result = Deno.core.ops.op_join_path(result, paths[i]);
+            result = __getDeno().core.ops.op_join_path(result, paths[i]);
         }
         return result;
     },
 
     dirname: function(p) {
-        return Deno.core.ops.op_dirname(p);
+        return __getDeno().core.ops.op_dirname(p);
     },
 
     basename: function(p) {
-        return Deno.core.ops.op_basename(p);
+        return __getDeno().core.ops.op_basename(p);
     },
 
     extname: function(p) {
-        const base = Deno.core.ops.op_basename(p);
+        const base = __getDeno().core.ops.op_basename(p);
         const lastDot = base.lastIndexOf('.');
         if (lastDot === -1 || lastDot === 0) return '';
         return base.substring(lastDot);
@@ -1633,7 +1656,7 @@ Module._extensions['.json'] = function(module, filename) {
  * 全局 require（从当前工作目录）
  */
 if (typeof require === 'undefined') {
-    const cwd = Deno.core.ops.op_getcwd();
+    const cwd = __getDeno().core.ops.op_getcwd();
     globalThis.require = createRequire(cwd);
     globalThis.module = { exports: {} };
     globalThis.exports = globalThis.module.exports;
@@ -1677,7 +1700,7 @@ const nodeCrypto = {
      */
     randomBytes: function(size, callback) {
         // op_crypto_get_random_values returns hex string
-        const hexString = Deno.core.ops.op_crypto_get_random_values(size);
+        const hexString = __getDeno().core.ops.op_crypto_get_random_values(size);
 
         // Convert hex string to Buffer
         const buf = Buffer.from(hexString, 'hex');
@@ -1697,7 +1720,7 @@ const nodeCrypto = {
      * @returns {string} UUID string
      */
     randomUUID: function() {
-        return Deno.core.ops.op_crypto_random_uuid();
+        return __getDeno().core.ops.op_crypto_random_uuid();
     },
 
     /**
@@ -1745,21 +1768,21 @@ class Hash {
         // Map algorithms to available ops
         switch (this._algorithm) {
             case 'md5':
-                result = Deno.core.ops.op_md5(this._data);
+                result = __getDeno().core.ops.op_md5(this._data);
                 break;
             case 'sha1':
-                result = Deno.core.ops.op_sha1(this._data);
+                result = __getDeno().core.ops.op_sha1(this._data);
                 break;
             case 'sha256':
-                result = Deno.core.ops.op_sha256(this._data);
+                result = __getDeno().core.ops.op_sha256(this._data);
                 break;
             case 'sha512':
-                result = Deno.core.ops.op_sha512(this._data);
+                result = __getDeno().core.ops.op_sha512(this._data);
                 break;
             case 'sm3':
                 // SM3 not directly supported, fallback to SHA256
                 console.warn('[crypto] SM3 not supported, using SHA256 as fallback');
-                result = Deno.core.ops.op_sha256(this._data);
+                result = __getDeno().core.ops.op_sha256(this._data);
                 break;
             default:
                 throw new Error(`Digest method ${this._algorithm} not supported`);
@@ -1833,23 +1856,23 @@ class Hmac {
         // Map algorithms to available ops
         switch (this._algorithm) {
             case 'md5':
-                result = Deno.core.ops.op_hmac_md5(this._key, this._data);
+                result = __getDeno().core.ops.op_hmac_md5(this._key, this._data);
                 break;
             case 'sha1':
-                result = Deno.core.ops.op_hmac_sha1(this._key, this._data);
+                result = __getDeno().core.ops.op_hmac_sha1(this._key, this._data);
                 break;
             case 'sha256':
-                result = Deno.core.ops.op_hmac_sha256(this._key, this._data);
+                result = __getDeno().core.ops.op_hmac_sha256(this._key, this._data);
                 break;
             case 'sha512':
                 // HMAC-SHA512 not directly supported, use SHA256 as fallback
                 console.warn('[crypto] HMAC-SHA512 not supported, using HMAC-SHA256 as fallback');
-                result = Deno.core.ops.op_hmac_sha256(this._key, this._data);
+                result = __getDeno().core.ops.op_hmac_sha256(this._key, this._data);
                 break;
             case 'sm3':
                 // SM3 not supported, fallback to SHA256
                 console.warn('[crypto] HMAC-SM3 not supported, using HMAC-SHA256 as fallback');
-                result = Deno.core.ops.op_hmac_sha256(this._key, this._data);
+                result = __getDeno().core.ops.op_hmac_sha256(this._key, this._data);
                 break;
             default:
                 throw new Error(`HMAC digest method ${this._algorithm} not supported`);
@@ -1885,49 +1908,49 @@ log('crypto module loaded (Node.js compatible)');
 if (typeof localStorage === 'undefined') {
     class Storage {
         setItem(key, value) {
-            const result = Deno.core.ops.op_local_storage_set_item(String(key), String(value));
+            const result = __getDeno().core.ops.op_local_storage_set_item(String(key), String(value));
             if (result !== 'OK') throw new Error(result);
         }
         getItem(key) {
-            const result = Deno.core.ops.op_local_storage_get_item(String(key));
+            const result = __getDeno().core.ops.op_local_storage_get_item(String(key));
             return result === 'null' ? null : result;
         }
         removeItem(key) {
-            Deno.core.ops.op_local_storage_remove_item(String(key));
+            __getDeno().core.ops.op_local_storage_remove_item(String(key));
         }
         clear() {
-            Deno.core.ops.op_local_storage_clear();
+            __getDeno().core.ops.op_local_storage_clear();
         }
         key(index) {
-            const keys = JSON.parse(Deno.core.ops.op_local_storage_keys());
+            const keys = JSON.parse(__getDeno().core.ops.op_local_storage_keys());
             return keys[index] || null;
         }
         get length() {
-            return Deno.core.ops.op_local_storage_length();
+            return __getDeno().core.ops.op_local_storage_length();
         }
     }
 
     class SessionStorage {
         setItem(key, value) {
-            const result = Deno.core.ops.op_session_storage_set_item(String(key), String(value));
+            const result = __getDeno().core.ops.op_session_storage_set_item(String(key), String(value));
             if (result !== 'OK') throw new Error(result);
         }
         getItem(key) {
-            const result = Deno.core.ops.op_session_storage_get_item(String(key));
+            const result = __getDeno().core.ops.op_session_storage_get_item(String(key));
             return result === 'null' ? null : result;
         }
         removeItem(key) {
-            Deno.core.ops.op_session_storage_remove_item(String(key));
+            __getDeno().core.ops.op_session_storage_remove_item(String(key));
         }
         clear() {
-            Deno.core.ops.op_session_storage_clear();
+            __getDeno().core.ops.op_session_storage_clear();
         }
         key(index) {
-            const keys = JSON.parse(Deno.core.ops.op_session_storage_keys());
+            const keys = JSON.parse(__getDeno().core.ops.op_session_storage_keys());
             return keys[index] || null;
         }
         get length() {
-            return Deno.core.ops.op_session_storage_length();
+            return __getDeno().core.ops.op_session_storage_length();
         }
     }
 
@@ -1958,18 +1981,18 @@ function createConfigurableObject(data) {
 }
 
 if (typeof navigator === 'undefined') {
-    const navigatorData = JSON.parse(Deno.core.ops.op_get_navigator());
+    const navigatorData = JSON.parse(__getDeno().core.ops.op_get_navigator());
     // 创建可配置对象，支持修改和 hook
     globalThis.navigator = createConfigurableObject(navigatorData);
 }
 
 if (typeof location === 'undefined') {
-    const locationData = JSON.parse(Deno.core.ops.op_get_location('https://example.com/'));
+    const locationData = JSON.parse(__getDeno().core.ops.op_get_location('https://example.com/'));
     globalThis.location = createConfigurableObject(locationData);
 }
 
 if (typeof document === 'undefined') {
-    const docProps = JSON.parse(Deno.core.ops.op_get_document_props());
+    const docProps = JSON.parse(__getDeno().core.ops.op_get_document_props());
     // document 需要包含方法
     const document = createConfigurableObject(docProps);
 
@@ -2031,7 +2054,7 @@ if (typeof window === 'undefined') {
 }
 
 // window 属性也设置为可配置
-const windowProps = JSON.parse(Deno.core.ops.op_get_window_props());
+const windowProps = JSON.parse(__getDeno().core.ops.op_get_window_props());
 for (const key in windowProps) {
     if (windowProps.hasOwnProperty(key)) {
         Object.defineProperty(globalThis, key, {
@@ -2044,7 +2067,7 @@ for (const key in windowProps) {
 }
 
 if (typeof screen === 'undefined') {
-    const screenData = JSON.parse(Deno.core.ops.op_get_screen());
+    const screenData = JSON.parse(__getDeno().core.ops.op_get_screen());
     globalThis.screen = createConfigurableObject(screenData);
 }
 
@@ -2214,7 +2237,7 @@ if (typeof URL === 'undefined') {
     class URL {
         constructor(url, base) {
             const urlString = base ? this._resolveUrl(url, base) : url;
-            const parsed = JSON.parse(Deno.core.ops.op_parse_url(urlString));
+            const parsed = JSON.parse(__getDeno().core.ops.op_parse_url(urlString));
 
             this.href = parsed.href;
             this.protocol = parsed.protocol;
@@ -2235,7 +2258,7 @@ if (typeof URL === 'undefined') {
             }
             // 简单的相对 URL 解析
             if (url.startsWith('/')) {
-                const baseParsed = JSON.parse(Deno.core.ops.op_parse_url(base));
+                const baseParsed = JSON.parse(__getDeno().core.ops.op_parse_url(base));
                 return `${baseParsed.origin}${url}`;
             }
             return `${base}/${url}`;
@@ -2864,7 +2887,7 @@ if (typeof performance === 'undefined') {
          * @returns {number} Time in milliseconds since timeOrigin
          */
         now() {
-            return Deno.core.ops.op_performance_now();
+            return __getDeno().core.ops.op_performance_now();
         }
 
         /**
@@ -2872,7 +2895,7 @@ if (typeof performance === 'undefined') {
          * @returns {number} Unix timestamp in milliseconds
          */
         get timeOrigin() {
-            return Deno.core.ops.op_performance_time_origin();
+            return __getDeno().core.ops.op_performance_time_origin();
         }
 
         /**
@@ -2881,8 +2904,8 @@ if (typeof performance === 'undefined') {
          * @returns {PerformanceMark} The created mark entry
          */
         mark(name) {
-            Deno.core.ops.op_performance_mark(String(name));
-            const timestamp = Deno.core.ops.op_performance_now();
+            __getDeno().core.ops.op_performance_mark(String(name));
+            const timestamp = __getDeno().core.ops.op_performance_now();
             return {
                 name: String(name),
                 entryType: 'mark',
@@ -2899,7 +2922,7 @@ if (typeof performance === 'undefined') {
          * @returns {PerformanceMeasure} The created measure entry
          */
         measure(name, startMark = '', endMark = '') {
-            const result = Deno.core.ops.op_performance_measure(
+            const result = __getDeno().core.ops.op_performance_measure(
                 String(name),
                 startMark ? String(startMark) : '',
                 endMark ? String(endMark) : ''
@@ -2917,7 +2940,7 @@ if (typeof performance === 'undefined') {
          * @param {string} name - Mark name to clear (optional, clears all if not specified)
          */
         clearMarks(name = '') {
-            Deno.core.ops.op_performance_clear_marks(name ? String(name) : '');
+            __getDeno().core.ops.op_performance_clear_marks(name ? String(name) : '');
         }
 
         /**
@@ -2925,7 +2948,7 @@ if (typeof performance === 'undefined') {
          * @param {string} name - Measure name to clear (optional, clears all if not specified)
          */
         clearMeasures(name = '') {
-            Deno.core.ops.op_performance_clear_measures(name ? String(name) : '');
+            __getDeno().core.ops.op_performance_clear_measures(name ? String(name) : '');
         }
 
         /**
@@ -2933,7 +2956,7 @@ if (typeof performance === 'undefined') {
          * @returns {Array<PerformanceEntry>} Array of all entries
          */
         getEntries() {
-            const json = Deno.core.ops.op_performance_get_entries();
+            const json = __getDeno().core.ops.op_performance_get_entries();
             return JSON.parse(json);
         }
 
@@ -2943,7 +2966,7 @@ if (typeof performance === 'undefined') {
          * @returns {Array<PerformanceEntry>} Array of matching entries
          */
         getEntriesByType(type) {
-            const json = Deno.core.ops.op_performance_get_entries_by_type(String(type));
+            const json = __getDeno().core.ops.op_performance_get_entries_by_type(String(type));
             return JSON.parse(json);
         }
 
@@ -2954,7 +2977,7 @@ if (typeof performance === 'undefined') {
          * @returns {Array<PerformanceEntry>} Array of matching entries
          */
         getEntriesByName(name, type = '') {
-            const json = Deno.core.ops.op_performance_get_entries_by_name(String(name));
+            const json = __getDeno().core.ops.op_performance_get_entries_by_name(String(name));
             const entries = JSON.parse(json);
 
             if (type) {
@@ -2983,4 +3006,467 @@ if (typeof performance === 'undefined') {
 
 // Mark Performance API loaded
 globalThis.__NEVER_JSCORE_PERFORMANCE_API_LOADED__ = true;
+
+// ============================================
+// Proxy Logging System (属性访问监控)
+// ============================================
+
+/**
+ * 全局日志存储
+ * 用于收集所有代理对象的属性访问记录
+ */
+globalThis.__PROXY_LOGS__ = [];
+globalThis.__PROXY_ENABLED__ = true;
+
+/**
+ * 创建代理对象，监控所有属性访问
+ * @param {Object} target - 要代理的目标对象
+ * @param {Object} options - 代理选项
+ *   - name: 对象名称（用于日志）
+ *   - logGet: 是否记录属性读取
+ *   - logSet: 是否记录属性设置
+ *   - logCall: 是否记录函数调用
+ *   - logDelete: 是否记录属性删除
+ *   - filter: 过滤函数，返回 true 则记录
+ * @returns {Proxy} 代理对象
+ */
+function $proxy(target, options = {}) {
+    const {
+        name = 'Object',
+        logGet = true,
+        logSet = true,
+        logCall = true,
+        logDelete = true,
+        filter = null
+    } = options;
+
+    const handler = {
+        get(obj, prop, receiver) {
+            const value = Reflect.get(obj, prop, receiver);
+
+            // 检查是否应该记录
+            if (globalThis.__PROXY_ENABLED__ && logGet) {
+                if (!filter || filter('get', prop, value)) {
+                    globalThis.__PROXY_LOGS__.push({
+                        type: 'get',
+                        target: name,
+                        property: String(prop),
+                        value: value,
+                        valueType: typeof value,
+                        timestamp: Date.now()
+                    });
+                }
+            }
+
+            // 如果是函数，包装它以监控调用
+            if (typeof value === 'function' && logCall) {
+                return new Proxy(value, {
+                    apply(fn, thisArg, args) {
+                        if (globalThis.__PROXY_ENABLED__) {
+                            if (!filter || filter('call', prop, args)) {
+                                globalThis.__PROXY_LOGS__.push({
+                                    type: 'call',
+                                    target: name,
+                                    property: String(prop),
+                                    arguments: args,
+                                    timestamp: Date.now()
+                                });
+                            }
+                        }
+
+                        const result = Reflect.apply(fn, thisArg, args);
+
+                        if (globalThis.__PROXY_ENABLED__) {
+                            if (!filter || filter('return', prop, result)) {
+                                globalThis.__PROXY_LOGS__.push({
+                                    type: 'return',
+                                    target: name,
+                                    property: String(prop),
+                                    result: result,
+                                    resultType: typeof result,
+                                    timestamp: Date.now()
+                                });
+                            }
+                        }
+
+                        return result;
+                    }
+                });
+            }
+
+            return value;
+        },
+
+        set(obj, prop, value, receiver) {
+            if (globalThis.__PROXY_ENABLED__ && logSet) {
+                if (!filter || filter('set', prop, value)) {
+                    globalThis.__PROXY_LOGS__.push({
+                        type: 'set',
+                        target: name,
+                        property: String(prop),
+                        value: value,
+                        valueType: typeof value,
+                        timestamp: Date.now()
+                    });
+                }
+            }
+
+            return Reflect.set(obj, prop, value, receiver);
+        },
+
+        deleteProperty(obj, prop) {
+            if (globalThis.__PROXY_ENABLED__ && logDelete) {
+                if (!filter || filter('delete', prop)) {
+                    globalThis.__PROXY_LOGS__.push({
+                        type: 'delete',
+                        target: name,
+                        property: String(prop),
+                        timestamp: Date.now()
+                    });
+                }
+            }
+
+            return Reflect.deleteProperty(obj, prop);
+        },
+
+        has(obj, prop) {
+            // 不记录 'in' 操作，避免过多日志
+            return Reflect.has(obj, prop);
+        },
+
+        ownKeys(obj) {
+            // 不记录 Object.keys() 等操作
+            return Reflect.ownKeys(obj);
+        }
+    };
+
+    return new Proxy(target, handler);
+}
+
+/**
+ * 获取所有代理日志
+ * @param {Object} filter - 过滤选项
+ *   - type: 日志类型 (get/set/call/return/delete)
+ *   - target: 目标对象名称
+ *   - property: 属性名
+ *   - since: 时间戳，只返回此时间之后的日志
+ * @returns {Array} 日志数组
+ */
+globalThis.$getProxyLogs = function(filter = {}) {
+    let logs = globalThis.__PROXY_LOGS__;
+
+    if (filter.type) {
+        logs = logs.filter(log => log.type === filter.type);
+    }
+
+    if (filter.target) {
+        logs = logs.filter(log => log.target === filter.target);
+    }
+
+    if (filter.property) {
+        logs = logs.filter(log => log.property === filter.property);
+    }
+
+    if (filter.since) {
+        logs = logs.filter(log => log.timestamp >= filter.since);
+    }
+
+    return logs;
+};
+
+/**
+ * 清空代理日志
+ */
+globalThis.$clearProxyLogs = function() {
+    globalThis.__PROXY_LOGS__ = [];
+};
+
+/**
+ * 启用/禁用代理日志
+ * @param {boolean} enabled - 是否启用
+ */
+globalThis.$setProxyLogging = function(enabled) {
+    globalThis.__PROXY_ENABLED__ = enabled;
+};
+
+/**
+ * 格式化打印代理日志
+ * @param {Object} filter - 过滤选项（同 $getProxyLogs）
+ */
+globalThis.$printProxyLogs = function(filter = {}) {
+    const logs = globalThis.$getProxyLogs(filter);
+
+    console.log(`\n========== Proxy Logs (${logs.length} entries) ==========`);
+
+    for (const log of logs) {
+        const time = new Date(log.timestamp).toISOString();
+
+        switch (log.type) {
+            case 'get':
+                console.log(`[${time}] GET ${log.target}.${log.property} => ${log.valueType}`);
+                break;
+
+            case 'set':
+                console.log(`[${time}] SET ${log.target}.${log.property} = ${JSON.stringify(log.value)}`);
+                break;
+
+            case 'call':
+                const args = log.arguments.map(a => JSON.stringify(a)).join(', ');
+                console.log(`[${time}] CALL ${log.target}.${log.property}(${args})`);
+                break;
+
+            case 'return':
+                console.log(`[${time}] RETURN ${log.target}.${log.property} => ${JSON.stringify(log.result)}`);
+                break;
+
+            case 'delete':
+                console.log(`[${time}] DELETE ${log.target}.${log.property}`);
+                break;
+        }
+    }
+
+    console.log(`========== End of Proxy Logs ==========\n`);
+};
+
+/**
+ * 代理全局对象（高级用法）
+ * @param {string} globalName - 全局对象名称
+ * @param {Object} options - 代理选项
+ * @returns {Proxy} 代理对象
+ */
+globalThis.$proxyGlobal = function(globalName, options = {}) {
+    const target = globalThis[globalName];
+
+    if (!target) {
+        throw new Error(`Global object '${globalName}' not found`);
+    }
+
+    const proxy = $proxy(target, { name: globalName, ...options });
+    globalThis[globalName] = proxy;
+
+    return proxy;
+};
+
+// 导出到全局
+globalThis.$proxy = $proxy;
+
+log('Proxy logging system loaded');
+
+// ============================================
+// Browser Environment Protection System
+// 浏览器环境完整保护 - 防检测
+// ============================================
+
+(function() {
+    log('Applying browser environment protection...');
+
+    // 1. 让函数看起来像原生代码
+    function makeNative(func, name) {
+        const nativeString = `function ${name}() { [native code] }`;
+
+        try {
+            Object.defineProperty(func, 'toString', {
+                value: function() { return nativeString; },
+                writable: false,
+                enumerable: false,
+                configurable: false
+            });
+
+            Object.defineProperty(func, 'name', {
+                value: name,
+                writable: false,
+                enumerable: false,
+                configurable: true
+            });
+        } catch (e) {
+            // 某些函数可能无法修改
+        }
+
+        return func;
+    }
+
+    // 2. 保护所有已定义的全局函数
+    const globalFunctions = [
+        'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
+        'fetch', 'btoa', 'atob',
+        'encodeURI', 'decodeURI', 'encodeURIComponent', 'decodeURIComponent',
+        'md5', 'sha1', 'sha256', 'sha512',
+        'hmacMd5', 'hmacSha1', 'hmacSha256'
+    ];
+
+    for (const funcName of globalFunctions) {
+        if (typeof globalThis[funcName] === 'function') {
+            makeNative(globalThis[funcName], funcName);
+        }
+    }
+
+    // 3. 保护 console 方法
+    if (typeof console !== 'undefined') {
+        const consoleMethods = ['log', 'warn', 'error', 'info', 'debug', 'trace', 'dir', 'table'];
+        for (const method of consoleMethods) {
+            if (typeof console[method] === 'function') {
+                makeNative(console[method], method);
+            }
+        }
+
+        // console.toString()
+        Object.defineProperty(console, 'toString', {
+            value: function() { return '[object Console]'; },
+            writable: false,
+            enumerable: false,
+            configurable: false
+        });
+    }
+
+    // 4. 保护 navigator 方法
+    if (typeof navigator !== 'undefined') {
+        // 确保 navigator 不可配置
+        try {
+            Object.defineProperty(globalThis, 'navigator', {
+                value: navigator,
+                writable: false,
+                enumerable: true,
+                configurable: false
+            });
+        } catch (e) {
+            // 已经定义了
+        }
+    }
+
+    // 5. 确保 window === globalThis
+    if (typeof window !== 'undefined' && window !== globalThis) {
+        globalThis.window = globalThis;
+    }
+
+    if (typeof self === 'undefined') {
+        globalThis.self = globalThis;
+    }
+
+    if (typeof top === 'undefined') {
+        globalThis.top = globalThis;
+    }
+
+    // 6. 添加 chrome 对象（Chrome 特征）
+    if (typeof chrome === 'undefined') {
+        globalThis.chrome = {
+            runtime: {},
+            loadTimes: function() {},
+            csi: function() {},
+            app: {}
+        };
+
+        Object.defineProperty(globalThis, 'chrome', {
+            value: globalThis.chrome,
+            writable: false,
+            enumerable: true,
+            configurable: false
+        });
+    }
+
+    // 7. 保护 Function.prototype.toString
+    const originalFunctionToString = Function.prototype.toString;
+
+    Function.prototype.toString = new Proxy(originalFunctionToString, {
+        apply(target, thisArg, args) {
+            // 如果函数有自己的 toString，使用它
+            const ownToString = Object.getOwnPropertyDescriptor(thisArg, 'toString');
+            if (ownToString && ownToString.value !== Function.prototype.toString) {
+                return ownToString.value.call(thisArg);
+            }
+            return target.apply(thisArg, args);
+        }
+    });
+
+    makeNative(Function.prototype.toString, 'toString');
+
+    // 8. 导出保护工具函数
+    globalThis.$makeNative = makeNative;
+
+    /**
+     * 保护自定义对象，使其看起来像浏览器原生对象
+     */
+    globalThis.$protect = function(obj, name) {
+        if (!obj || typeof obj !== 'object' && typeof obj !== 'function') {
+            return obj;
+        }
+
+        // 保护对象的所有方法
+        for (const key of Object.getOwnPropertyNames(obj)) {
+            try {
+                const value = obj[key];
+                if (typeof value === 'function') {
+                    makeNative(value, key);
+                }
+            } catch (e) {
+                // 忽略无法访问的属性
+            }
+        }
+
+        // 保护原型链
+        const proto = Object.getPrototypeOf(obj);
+        if (proto && proto !== Object.prototype && proto !== Function.prototype) {
+            for (const key of Object.getOwnPropertyNames(proto)) {
+                try {
+                    const value = proto[key];
+                    if (typeof value === 'function') {
+                        makeNative(value, key);
+                    }
+                } catch (e) {
+                    // 忽略
+                }
+            }
+        }
+
+        log(`Protected object: ${name}`);
+        return obj;
+    };
+
+    /**
+     * 检测环境是否暴露了 Node/Deno 特征
+     */
+    globalThis.$checkEnvironment = function() {
+        const issues = [];
+
+        // 检查 Deno
+        if (__internalDeno && Deno !== undefined) {
+            issues.push('Deno object is visible');
+        }
+
+        // 检查 process (Node.js)
+        if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+            // process 存在但我们伪造了它，所以这个检查可能通过
+        }
+
+        // 检查 require
+        if (typeof require !== 'function') {
+            // require 应该存在（我们提供了）
+        }
+
+        // 检查 window
+        if (typeof window === 'undefined') {
+            issues.push('window is undefined');
+        } else if (window !== globalThis) {
+            issues.push('window !== globalThis');
+        }
+
+        // 检查 navigator
+        if (typeof navigator === 'undefined') {
+            issues.push('navigator is undefined');
+        } else {
+            const ua = navigator.userAgent || '';
+            if (ua.includes('Deno')) {
+                issues.push('User-Agent contains "Deno"');
+            }
+        }
+
+        return issues;
+    };
+
+    log('Browser environment protection complete');
+
+    const issues = globalThis.$checkEnvironment();
+    if (issues.length > 0) {
+        log('Protection warnings:', issues);
+    }
+})();
 

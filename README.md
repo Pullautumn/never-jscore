@@ -8,7 +8,7 @@
 
 **警告**：仅供技术研究和学习，请勿用于违法用途，后果自负。
 
-加v进交流群: xu970821582
+- **技术交流群**：加微信 xu970821582
 
 ---
 
@@ -35,6 +35,8 @@
 - 🔄 **现代 JS 支持**：完整的 Promise、async/await、fetch、localStorage
 
 ### 性能基准测试
+
+![img.png](img.png)
 
 | 测试项目 | never_jscore | PyMiniRacer | PyExecJS |
 |---------|-------------|-------------|----------|
@@ -296,6 +298,72 @@ result = ctx.evaluate("""
 
 </details>
 
+### 🔬 V8 堆内存分析：专业级内存调试
+
+never_jscore 提供 V8 引擎的原生内存分析 API，可以深入分析 JavaScript 内存使用情况：
+
+```python
+ctx = never_jscore.Context()
+
+# 1. 获取 V8 堆统计信息
+heap_stats = ctx.get_heap_statistics()
+
+print(f"总堆大小: {heap_stats['total_heap_size'] / 1024 / 1024:.2f} MB")
+print(f"已使用堆: {heap_stats['used_heap_size'] / 1024 / 1024:.2f} MB")
+print(f"堆大小限制: {heap_stats['heap_size_limit'] / 1024 / 1024:.2f} MB")
+print(f"物理内存: {heap_stats['total_physical_size'] / 1024 / 1024:.2f} MB")
+print(f"外部内存: {heap_stats['external_memory'] / 1024:.2f} KB")
+print(f"使用率: {heap_stats['used_heap_size'] / heap_stats['total_heap_size'] * 100:.1f}%")
+
+# 2. 导出堆快照到 Chrome DevTools
+ctx.take_heap_snapshot("heap_snapshot.heapsnapshot")
+
+# 然后在 Chrome DevTools 中分析：
+# 1. 打开 Chrome -> F12 -> Memory 标签
+# 2. 点击 "Load" 按钮加载快照文件
+# 3. 查看对象分配、内存泄漏、循环引用等
+```
+
+**V8 堆统计字段说明**：
+- `total_heap_size` - V8 堆总大小（包括未使用空间）
+- `used_heap_size` - 已使用的堆内存
+- `heap_size_limit` - V8 堆大小上限
+- `total_physical_size` - 实际物理内存占用
+- `malloced_memory` - 通过 malloc 分配的内存
+- `external_memory` - 外部对象占用的内存
+- `number_of_native_contexts` - 原生上下文数量
+
+**实战场景：检测内存泄漏**
+
+```python
+ctx = never_jscore.Context()
+
+# 基准快照
+ctx.take_heap_snapshot("before.heapsnapshot")
+heap_before = ctx.get_heap_statistics()
+
+# 执行可能泄漏的代码
+ctx.evaluate("""
+    globalThis.leakedData = [];
+    for (let i = 0; i < 10000; i++) {
+        leakedData.push({
+            id: i,
+            data: new Array(100).fill(i)
+        });
+    }
+""")
+
+# 泄漏后快照
+ctx.take_heap_snapshot("after.heapsnapshot")
+heap_after = ctx.get_heap_statistics()
+
+# 分析内存增长
+growth = heap_after['used_heap_size'] - heap_before['used_heap_size']
+print(f"内存增长: {growth / 1024 / 1024:.2f} MB")
+
+# 在 Chrome DevTools 中对比两个快照，找出泄漏对象
+```
+
 ---
 
 ## 核心 API 参考
@@ -326,6 +394,8 @@ never_jscore.Context(
 | `gc()` | 请求垃圾回收 | 长时间运行时手动释放内存 |
 | `get_stats()` | 获取统计信息 | 性能分析、调用计数 |
 | `reset_stats()` | 重置统计 | 基准测试前清零 |
+| `get_heap_statistics()` | **获取 V8 堆统计信息** | **内存监控、泄漏分析** |
+| `take_heap_snapshot(path)` | **导出 V8 堆快照** | **Chrome DevTools 内存分析** |
 
 **compile() vs evaluate() 的关键区别**：
 
@@ -361,11 +431,43 @@ print(result)  # 'done'
 **上下文管理器（自动清理）**：
 
 ```python
+# ✅ 单次使用：安全
 with never_jscore.Context() as ctx:
     result = ctx.evaluate("1 + 2")
     print(result)  # 3
 # 退出 with 块后自动释放资源
 ```
+
+**⚠️ 重要警告：不要在循环中直接使用 `with` 语句！**
+
+```python
+# ❌ 错误用法：会崩溃！
+for i in range(10):
+    with never_jscore.Context() as ctx:  # HandleScope 错误
+        result = ctx.evaluate(f"{i} + 1")
+
+# ✅ 正确用法 1：包装在函数中
+def process(data):
+    with never_jscore.Context() as ctx:
+        return ctx.evaluate(f"{data} + 1")
+
+for i in range(100):
+    result = process(i)  # 安全
+
+# ✅ 正确用法 2：显式 del
+for i in range(100):
+    ctx = never_jscore.Context()
+    result = ctx.evaluate(f"{i} + 1")
+    del ctx  # 立即清理
+
+# ✅ 正确用法 3：复用 Context（推荐，性能最佳）
+ctx = never_jscore.Context()
+for i in range(1000):
+    result = ctx.evaluate(f"{i} + 1")
+del ctx
+```
+
+**原因**：Python 的 `with` 语句调用 `__exit__` 但不保证立即销毁对象，循环中快速创建多个 Context 会导致 V8 HandleScope 累积崩溃。详见：[docs/CONTEXT_MANAGER_WARNING.md](docs/CONTEXT_MANAGER_WARNING.md)
 
 ### 类型转换表
 
@@ -750,19 +852,166 @@ with Pool(4) as pool:
 
 ---
 
-## 示例代码
+## 示例代码和测试
 
-查看 `tests/` 和 `examples/` 目录获取更多实战案例：
+### 📦 完整测试套件（`tests/` 目录）
 
-- **性能测试**：`examples/benchmark.py`
-- **多线程应用**：`examples/test.py`, `tests/test_multithreading.py`
-- **Hook 拦截**：`tests/test_hook_interception.py`, `tests/reverse_engineering_hook_example.py`
-- **Web API 使用**：`tests/test_browser_apis.py`, `tests/test_nodejs_compat.py`
-- **异步编程**：`tests/test_async_simple.py`
+我们提供了 **10 个全面的测试文件**，展示所有核心功能的使用方法：
+
+| 测试文件 | 功能说明 | 运行命令 |
+|---------|---------|----------|
+| `test_browser_protection.py` | 浏览器环境防检测 | `python tests/test_browser_protection.py` |
+| `test_proxy_logging.py` | Proxy 日志系统 | `python tests/test_proxy_logging.py` |
+| `test_random_seed.py` | 确定性随机数 | `python tests/test_random_seed.py` |
+| `test_hook_interception.py` | Hook 拦截系统 | `python tests/test_hook_interception.py` |
+| `test_async_promise.py` | Promise/async/await | `python tests/test_async_promise.py` |
+| `test_web_apis.py` | Web API（fetch, localStorage 等） | `python tests/test_web_apis.py` |
+| `test_context_management.py` | Context 管理和 with 语句 | `python tests/test_context_management.py` |
+| `test_multithreading.py` | 多线程使用 | `python tests/test_multithreading.py` |
+| `test_xmlhttprequest.py` | XMLHttpRequest | `python tests/test_xmlhttprequest.py` |
+| `test_memory_and_performance.py` | 内存监控和性能调优 | `python tests/test_memory_and_performance.py` |
+
+**运行所有测试：**
+```bash
+python tests/run_all_tests.py
+```
+
+### 🎯 快速示例
+
+#### 1. Context 管理（with 语句）
+
+```python
+import never_jscore
+
+# ✅ 正确：单次使用
+with never_jscore.Context() as ctx:
+    result = ctx.evaluate("1 + 2")
+
+# ✅ 正确：循环复用 Context（最推荐）
+ctx = never_jscore.Context()
+for i in range(1000):
+    result = ctx.call("func", [i])
+del ctx
+
+# ✅ 正确：函数作用域 + with
+def process(data):
+    with never_jscore.Context() as ctx:
+        return ctx.evaluate(f"transform({data})")
+
+for i in range(100):
+    process(i)
+
+# ❌ 错误：直接在循环中用 with（会崩溃！）
+for i in range(100):  # ❌ 危险
+    with never_jscore.Context() as ctx:
+        ctx.evaluate(...)
+```
+
+#### 2. 多线程使用
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
+# ✅ 最佳实践：ThreadLocal + Context 复用
+thread_local = threading.local()
+
+def get_context():
+    if not hasattr(thread_local, 'ctx'):
+        thread_local.ctx = never_jscore.Context()
+        thread_local.ctx.compile(js_code)
+    return thread_local.ctx
+
+def worker(data):
+    ctx = get_context()  # 每个线程复用自己的 Context
+    return ctx.call("process", [data])
+
+# 使用线程池并行处理
+with ThreadPoolExecutor(max_workers=4) as executor:
+    results = list(executor.map(worker, data_list))
+```
+
+#### 3. 内存监控和性能调优
+
+```python
+# V8 堆统计信息
+ctx = never_jscore.Context()
+heap_stats = ctx.get_heap_statistics()
+print(f"总堆大小: {heap_stats['total_heap_size'] / 1024 / 1024:.2f} MB")
+print(f"已使用堆: {heap_stats['used_heap_size'] / 1024 / 1024:.2f} MB")
+print(f"堆大小限制: {heap_stats['heap_size_limit'] / 1024 / 1024:.2f} MB")
+print(f"使用率: {heap_stats['used_heap_size'] / heap_stats['total_heap_size'] * 100:.1f}%")
+
+# 导出 Chrome DevTools 堆快照（分析内存泄漏）
+ctx.take_heap_snapshot("heap_snapshot.heapsnapshot")
+# 然后在 Chrome DevTools -> Memory -> Load 加载快照进行分析
+
+# 定期触发 GC 清理内存
+for i in range(1000):
+    ctx.call("process", [i])
+    if i % 100 == 0:
+        ctx.gc()  # 每 100 次清理一次
+
+# 获取统计信息
+stats = ctx.get_stats()
+print(f"evaluate: {stats['evaluate_count']} 次")
+print(f"call: {stats['call_count']} 次")
+
+# 启用日志进行调试
+ctx = never_jscore.Context(enable_logging=True)
+ctx.evaluate("console.log('Hello')")  # 会输出 Rust 日志
+```
+
+#### 4. XMLHttpRequest 使用
+
+```python
+ctx = never_jscore.Context()
+
+result = ctx.evaluate("""
+    (async () => {
+        return new Promise((resolve) => {
+            const xhr = new XMLHttpRequest();
+
+            xhr.onload = function() {
+                resolve({
+                    status: xhr.status,
+                    data: JSON.parse(xhr.responseText)
+                });
+            };
+
+            xhr.open('GET', 'https://api.example.com/data');
+            xhr.setRequestHeader('Authorization', 'Bearer token');
+            xhr.send();
+        });
+    })()
+""")
+
+print(f"状态: {result['status']}")
+print(f"数据: {result['data']}")
+```
+
+### 📚 详细文档
+
+查看 `tests/README.md` 获取每个测试的详细说明和示例代码。
 
 ---
 
 ## 更新日志
+
+### v2.4.2 (2025-11-17)
+- 🛡️ **增加浏览器环境防检测**
+  - 隐藏 Deno 特征，所有函数显示为 `[native code]`
+  - 保护 `Function.prototype.toString` 防止检测
+  - 添加 `chrome` 对象（Chrome 浏览器特征）
+- 🔍 **Proxy 日志系统增强**
+  - `$proxy()` - 创建代理对象监控属性访问
+  - `$getProxyLogs()` - 获取所有访问日志
+  - `$proxyGlobal()` - 代理全局对象（如 `navigator`、`document`）
+  - `$printProxyLogs()` - 格式化打印日志
+- ✨ **新增了专业级的 V8 堆内存分析能力**
+  - 实时内存监控 - get_heap_statistics() 提供 7 种堆内存指标
+  - Chrome DevTools 集成 - take_heap_snapshot() 导出标准快照文件
+  - 内存泄漏检测 - 通过快照对比分析内存泄漏
 
 ### v2.4.0 (2025-11-14)
 - ✨ 新增 `Blob` 对象，完善 `URL` 和 `URLSearchParams` 方法
@@ -806,7 +1055,6 @@ with Pool(4) as pool:
 - ✅ 修复 HandleScope 错误
 - ✨ Web API 扩展系统（Crypto、URL 编码、定时器等）
 
-[查看完整更新日志](CHANGELOG.md)
 
 ---
 
@@ -817,14 +1065,7 @@ with Pool(4) as pool:
 - **HandleScope 错误解决方案**：[docs/HANDLESCOPE_ERROR_SOLUTIONS.md](docs/HANDLESCOPE_ERROR_SOLUTIONS.md)
 - **with 语句限制说明**：[docs/WITH_STATEMENT_LIMITATION.md](docs/WITH_STATEMENT_LIMITATION.md)
 - **多线程支持指南**：[docs/MULTITHREADING.md](docs/MULTITHREADING.md)
-- **开发者指南**：[CLAUDE.md](CLAUDE.md)
 
-### 💡 示例代码
-- `examples/benchmark.py` - 性能基准测试
-- `examples/test.py` - 实战案例（多线程）
-- `tests/test_hook_interception.py` - Hook 拦截示例
-- `tests/test_browser_apis.py` - Web API 使用示例
-- `tests/test_multithreading.py` - 多线程测试
 
 ### 🔗 相关项目
 - [py_mini_racer](https://github.com/sqreen/PyMiniRacer) - Python MiniRacer 实现
@@ -846,6 +1087,3 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 - **Bug 报告**：[GitHub Issues](https://github.com/neverl805/never-jscore/issues)
 - **功能建议**：[GitHub Discussions](https://github.com/neverl805/never-jscore/discussions)
-- **技术交流群**：加微信 xu970821582
-
-**开发者**：如需修改代码，请参考 [CLAUDE.md](CLAUDE.md) 了解架构设计。

@@ -10,11 +10,12 @@ thread_local! {
     static RNG_STATE: RefCell<RngState> = RefCell::new(RngState::default());
 }
 
-struct RngState {
+/// Per-runtime RNG state (stored in OpState)
+pub struct RngState {
     /// Seeded RNG (if seed was set)
-    seeded_rng: Option<StdRng>,
+    pub seeded_rng: Option<StdRng>,
     /// Current seed value (for debugging)
-    seed: Option<u64>,
+    pub seed: Option<u64>,
 }
 
 impl Default for RngState {

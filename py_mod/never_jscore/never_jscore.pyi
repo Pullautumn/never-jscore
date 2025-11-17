@@ -194,12 +194,24 @@ class Context:
         """
         ...
 
-    def get_stats(self) -> tuple[int]:
+    def get_stats(self) -> dict[str, int]:
         """
         获取执行统计信息
 
         Returns:
-            包含执行次数的元组 (exec_count,)
+            包含各类操作计数的字典:
+            - evaluate_count: evaluate() 调用次数
+            - compile_count: compile() 调用次数
+            - call_count: call() 调用次数
+
+        Example:
+            >>> ctx = Context()
+            >>> ctx.evaluate("1 + 1")
+            >>> ctx.compile("function test() {}")
+            >>> ctx.call("test", [])
+            >>> stats = ctx.get_stats()
+            >>> print(stats)
+            {'evaluate_count': 1, 'compile_count': 1, 'call_count': 1}
         """
         ...
 
@@ -209,11 +221,66 @@ class Context:
         """
         ...
 
+    def get_heap_statistics(self) -> dict[str, int]:
+        """
+        获取 V8 堆内存统计信息
+
+        Returns:
+            包含 V8 堆内存统计的字典:
+            - total_heap_size: V8 堆总大小（字节），包括未使用空间
+            - used_heap_size: 已使用的堆内存（字节）
+            - heap_size_limit: V8 堆大小上限（字节）
+            - total_physical_size: 实际物理内存占用（字节）
+            - malloced_memory: 通过 malloc 分配的内存（字节）
+            - external_memory: 外部对象占用的内存（字节）
+            - number_of_native_contexts: 原生上下文数量
+
+        Example:
+            >>> ctx = Context()
+            >>> ctx.evaluate("const arr = []; for(let i=0; i<10000; i++) arr.push({id:i})")
+            >>> heap = ctx.get_heap_statistics()
+            >>> print(f"Total: {heap['total_heap_size'] / 1024 / 1024:.2f} MB")
+            >>> print(f"Used: {heap['used_heap_size'] / 1024 / 1024:.2f} MB")
+            >>> print(f"Usage: {heap['used_heap_size'] / heap['total_heap_size'] * 100:.1f}%")
+        """
+        ...
+
+    def take_heap_snapshot(self, file_path: str) -> None:
+        """
+        导出 V8 堆快照到文件（Chrome DevTools 格式）
+
+        导出的 .heapsnapshot 文件可以在 Chrome DevTools 中分析:
+        1. 打开 Chrome -> F12 -> Memory 标签
+        2. 点击 "Load" 按钮加载快照文件
+        3. 查看对象分配、内存泄漏、循环引用等
+
+        Args:
+            file_path: 快照文件保存路径（通常以 .heapsnapshot 结尾）
+
+        Raises:
+            Exception: 文件创建失败或写入失败时
+
+        Example:
+            >>> ctx = Context()
+            >>> # 执行一些代码
+            >>> ctx.evaluate("globalThis.data = []; for(let i=0; i<5000; i++) data.push({id:i})")
+            >>> # 导出堆快照
+            >>> ctx.take_heap_snapshot("heap_snapshot.heapsnapshot")
+            >>> # 在 Chrome DevTools 中分析内存使用
+
+            >>> # 内存泄漏检测示例
+            >>> ctx.take_heap_snapshot("before.heapsnapshot")
+            >>> ctx.evaluate("globalThis.leaked = []; for(let i=0; i<10000; i++) leaked.push({data: new Array(100).fill(i)})")
+            >>> ctx.take_heap_snapshot("after.heapsnapshot")
+            >>> # 在 Chrome DevTools 中对比两个快照找出泄漏对象
+        """
+        ...
+
 # 类型别名
 JSValue = Union[None, bool, int, float, str, List[Any], dict[str, Any]]
 """JavaScript 值的 Python 类型表示"""
 
-__version__: str = "2.0.0"
+__version__: str = "2.4.2"
 """模块版本号"""
 
 __all__ = [
