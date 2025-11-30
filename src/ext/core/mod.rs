@@ -30,10 +30,18 @@ pub fn op_early_return(state: &mut OpState, #[string] value: String) {
     }
 }
 
+/// Op: Log message to stderr (for debugging)
+///
+/// Used by the protection system to log Web API calls when logging is enabled.
+#[deno_core::op2(fast)]
+pub fn op_log(#[string] message: &str) {
+    eprintln!("{}", message);
+}
+
 // Core extension - provides basic never_jscore functionality
 extension!(
     init_core,
-    ops = [op_store_result, op_early_return],
+    ops = [op_store_result, op_early_return, op_log],
     options = {
         storage: Rc<ResultStorage>,
         enable_logging: bool,

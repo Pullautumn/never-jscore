@@ -1,138 +1,139 @@
 # never-jscore 测试套件
 
-本目录包含 never-jscore v2.4.3+ 的完整测试用例，展示所有核心功能的使用方法。
+本目录包含 never-jscore v2.5.0+ 的核心测试用例。
 
-## 运行所有测试
+## 快速开始
 
 ```bash
+# 运行所有测试
 python tests/run_all_tests.py
+
+# 运行单个测试
+python tests/test_async_promise.py
 ```
 
-## 测试文件列表
+## 核心测试文件
 
-### ⭐ NEW: `test_terminate_hook.py` - V8 强制终止 Hook 拦截
-**测试内容：**
-- 基本 `__saveAndTerminate__()` / `$terminate()` 功能
-- Hook XMLHttpRequest.send（**无法被 try-catch 捕获**）
-- 绕过 try-catch 防护（关键测试）
-- 简短别名 `$terminate` vs 完整名称
-- 对比 `$return()` vs `$terminate()` 的区别
-- 多 Context 数据隔离
+### 🔧 基础功能
 
-**关键特性：** 使用 V8 `terminate_execution()`，强制终止 JS 执行，无法被 try-catch 捕获，适合对抗加固代码
+| 测试文件 | 功能 | 说明 |
+|---------|------|------|
+| `test_async_promise.py` | Promise/async/await | Promise 链、setTimeout、微任务与宏任务 |
+| `test_context_management.py` | Context 生命周期管理 | 避免 HandleScope 错误的最佳实践 |
+| `test_new_extension_system.py` | 扩展系统架构 | 模块化扩展加载和配置 |
+| `test_xmlhttprequest.py` | XMLHttpRequest API | HTTP 请求、响应处理、Hook 拦截 |
 
-**运行：** `python tests/test_terminate_hook.py`
+### 🌐 Web API 集成
 
----
+| 测试文件 | 功能 | 说明 |
+|---------|------|------|
+| `test_deno_web_api.py` | Deno Web API | URL, TextEncoder, Streams, Events, fetch 等 |
+| `test_browser_protection_deno_web.py` | 反检测保护 | 隐藏 Deno、函数显示 [native code] |
 
-### 1. `test_browser_protection.py` - 浏览器环境防检测 ⭐⭐⭐
-**测试内容：**
-- Deno 对象隐藏
-- 浏览器全局对象（window, document, navigator, location）
-- 函数显示为 `[native code]`
-- Chrome 浏览器特征（chrome 对象）
-- 综合环境检测绕过
+### 📦 Node.js 兼容性
 
-**关键功能：** 隐藏 Deno 运行时特征，模拟真实浏览器环境
+| 测试文件 | 功能 | 说明 |
+|---------|------|------|
+| `test_node_require.py` | require() 功能 | Node.js 内置模块、npm 包加载 |
+| `test_jsdom.py` | jsdom DOM 操作 | 完整的 DOM API 支持 |
 
----
+### 🛡️ 逆向工程工具
 
-### 2. `test_proxy_logging.py` - Proxy 日志系统 ⭐⭐⭐
-**测试内容：**
-- `$proxy()` 创建代理对象
-- `$getProxyLogs()` 获取访问日志
-- `$proxyGlobal()` 代理全局对象
-- 函数调用监控
-- 逆向工程实战场景
+| 测试文件 | 功能 | 说明 |
+|---------|------|------|
+| `test_terminate_hook.py` | 强制终止 Hook | V8 terminate，无法被 try-catch 捕获 |
+| `test_random_seed.py` | 确定性随机数 | 调试包含随机 nonce 的加密算法 |
 
-**关键功能：** 监控对象属性访问，分析加密库调用链
+### ⚡ 性能与优化
 
----
-
-### 3. `test_random_seed.py` - 确定性随机数 ⭐⭐⭐
-**测试内容：**
-- `Math.random()` 种子控制
-- `crypto.randomUUID()` 种子控制
-- 可重现加密调试
-- 动态签名生成
-
-**关键功能：** 使用固定种子让随机数可重现，调试包含随机 nonce 的加密算法
+| 测试文件 | 功能 | 说明 |
+|---------|------|------|
+| `test_memory_and_performance.py` | 内存监控 | V8 堆统计、堆快照、GC 优化 |
+| `test_multithreading.py` | 多线程 | ThreadLocal + Context 复用模式 |
+| `test_extension_modes_comparison.py` | 扩展模式对比 | 三种模式的性能和内存对比 |
 
 ---
 
-### 4. `test_hook_interception.py` - Hook 拦截系统 ⭐⭐⭐
-**测试内容：**
-- `$return()` 提前返回
-- Hook 加密函数
-- Hook XMLHttpRequest
-- 提取中间值
-- Token 密钥提取
+## 核心功能示例
 
-**关键功能：** 在任意位置拦截 JS 执行，提取加密参数和密钥
+### 1. Context 管理（避免崩溃）
 
----
-
-### 5. `test_async_promise.py` - Promise 和异步
-**测试内容：**
-- Promise 链式调用
-- async/await
-- setTimeout/setInterval + Promise
-- 嵌套异步
-- 微任务与宏任务
-
-**关键功能：** 完整支持 Promise/async/await，自动等待异步操作
-
----
-
-### 6. `test_web_apis.py` - Web API
-**测试内容：**
-- 加密 API（md5, sha256, crypto）
-- localStorage/sessionStorage
-- URL 处理
-- Buffer、Blob
-- Performance API
-
-**关键功能：** 内置 800+ 行 Web API polyfill，零配置使用浏览器 API
-
----
-
-### 7. `test_context_management.py` - Context 管理 ⭐⭐
-**测试内容：**
-- with 语句正确用法
-- 循环中的 Context 使用
-- Context 复用 vs 重新创建
-- 性能对比
-- 常见陷阱
-
-**关键功能：** 避免 HandleScope 错误，掌握正确的 Context 管理模式
-
-**关键示例：**
 ```python
 # ✅ 正确：复用 Context
 ctx = never_jscore.Context()
 for i in range(1000):
-    ctx.call("func", [i])
+    result = ctx.call("func", [i])
 del ctx
 
-# ❌ 错误：循环中直接用 with
-for i in range(100):  # 会崩溃！
-    with never_jscore.Context() as ctx:
-        ctx.evaluate(...)
+# ❌ 错误：循环中用 with（会在 10-20 次后崩溃）
+for i in range(100):
+    with never_jscore.Context() as ctx:  # 错误！
+        ctx.evaluate("...")
 ```
 
----
+### 2. Hook 拦截（两种模式）
 
-### 8. `test_multithreading.py` - 多线程使用 ⭐⭐
-**测试内容：**
-- ThreadPoolExecutor 使用
-- ThreadLocal + Context 复用
-- 性能对比（单线程 vs 多线程）
-- 线程隔离性
-- 错误处理
+**模式 A：`$return()` - 可被 try-catch 捕获**
+```python
+result = ctx.evaluate("""
+    CryptoLib.encrypt = function(text, key) {
+        $return({ text, key });  // 提前返回
+    };
+    login('user', 'pass');
+""")
+print(f"密钥: {result['key']}")
+```
 
-**关键功能：** 在多线程环境中安全使用 never-jscore
+**模式 B：`$terminate()` - 强制终止（推荐）**
+```python
+ctx.clear_hook_data()
+try:
+    ctx.evaluate("""
+        CryptoLib.encrypt = function(text, key) {
+            $terminate({ text, key });  // 无法被 try-catch 捕获
+        };
+        try {
+            login('user', 'pass');
+        } catch (e) {
+            // 不会执行
+        }
+    """)
+except:
+    pass
 
-**最佳实践：**
+data = json.loads(ctx.get_hook_data())
+print(f"密钥: {data['key']}")
+```
+
+### 3. 确定性随机数
+
+```python
+# 固定种子让结果可重现
+ctx = never_jscore.Context(random_seed=12345)
+r1 = ctx.evaluate("Math.random()")
+r2 = ctx.evaluate("Math.random()")
+# 每次运行结果相同！
+```
+
+### 4. Node.js 兼容性
+
+```python
+# 使用 Node.js 模块和 npm 包
+ctx = never_jscore.Context(enable_node_compat=True)
+
+result = ctx.evaluate("""
+    const path = require('path');
+    const crypto = require('crypto');
+    const { JSDOM } = require('jsdom');  // npm 包
+
+    const dom = new JSDOM('<h1>Hello</h1>');
+    dom.window.document.querySelector('h1').textContent
+""")
+print(result)  # 'Hello'
+```
+
+### 5. 多线程并行
+
 ```python
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -153,227 +154,126 @@ with ThreadPoolExecutor(max_workers=4) as executor:
     results = list(executor.map(worker, data_list))
 ```
 
----
+### 6. 内存监控
 
-### 9. `test_xmlhttprequest.py` - XMLHttpRequest ⭐
-**测试内容：**
-- xhr.open() / xhr.send()
-- 请求头设置
-- 响应处理
-- POST JSON 数据
-- Hook 拦截请求
-
-**关键功能：** 完整的 XMLHttpRequest API，可发送真实 HTTP 请求
-
-**示例：**
-```python
-result = ctx.evaluate("""
-    (async () => {
-        return new Promise((resolve) => {
-            const xhr = new XMLHttpRequest();
-            xhr.onload = () => resolve(JSON.parse(xhr.responseText));
-            xhr.open('GET', 'https://api.example.com/data');
-            xhr.send();
-        });
-    })()
-""")
-```
-
----
-
-### 10. `test_memory_and_performance.py` - 内存监控和性能调优 ⭐⭐
-**测试内容：**
-- 内存泄漏检测
-- **V8 堆统计信息 (get_heap_statistics)** ⭐
-- **V8 堆快照导出 (take_heap_snapshot)** ⭐
-- 批量处理 + GC
-- 性能分析
-- Context 创建开销
-- 调试技巧
-
-**关键功能：** 优化内存使用，提升性能，调试问题
-
-**V8 堆监控：**
 ```python
 # 获取 V8 堆统计信息
 heap_stats = ctx.get_heap_statistics()
-print(f"总堆大小: {heap_stats['total_heap_size'] / 1024 / 1024:.2f} MB")
-print(f"已使用堆: {heap_stats['used_heap_size'] / 1024 / 1024:.2f} MB")
-print(f"堆大小限制: {heap_stats['heap_size_limit'] / 1024 / 1024:.2f} MB")
+print(f"已使用: {heap_stats['used_heap_size'] / 1024 / 1024:.2f} MB")
 print(f"使用率: {heap_stats['used_heap_size'] / heap_stats['total_heap_size'] * 100:.1f}%")
 
 # 导出 Chrome DevTools 堆快照
-ctx.take_heap_snapshot("heap_snapshot.heapsnapshot")
-# 然后在 Chrome DevTools -> Memory -> Load 加载快照分析
-```
+ctx.take_heap_snapshot("heap.heapsnapshot")
+# 在 Chrome DevTools -> Memory -> Load 加载分析
 
-**优化技巧：**
-```python
-# 1. 定期触发 GC
-ctx = never_jscore.Context()
+# 定期 GC
 for i in range(1000):
     ctx.call("process", [i])
     if i % 100 == 0:
-        ctx.gc()  # 每 100 次清理一次
+        ctx.gc()
+```
 
-# 2. 获取统计信息
-stats = ctx.get_stats()
-print(f"call: {stats['call_count']} 次")
+### 7. API 日志（v2.5.1+）
 
-# 3. 启用日志调试
+```python
+# 启用日志
 ctx = never_jscore.Context(enable_logging=True)
-```
 
----
-
-## 快速开始
-
-### 运行单个测试
-```bash
-python tests/test_browser_protection.py
-python tests/test_hook_interception.py
-```
-
-### 运行所有测试
-```bash
-python tests/run_all_tests.py
-```
-
-预期输出：
-```
-============================================================
-测试结果总结
-============================================================
-[通过] 浏览器环境防检测
-[通过] Proxy 日志系统
-[通过] 确定性随机数
-[通过] Hook 拦截系统
-[通过] Promise 和异步功能
-[通过] Web API 和浏览器环境
-[通过] Context 上下文管理
-[通过] 多线程使用
-[通过] XMLHttpRequest
-[通过] 内存监控和性能调优
-
-总计: 10/10 测试通过
-```
-
----
-
-## 常见用法速查
-
-### 1. 调试动态加密
-```python
-# 使用固定种子让加密结果可重现
-ctx = never_jscore.Context(random_seed=12345)
-result1 = ctx.call("encrypt", ["data"])
-result2 = ctx.call("encrypt", ["data"])
-assert result1 == result2  # 完全相同！
-```
-
-### 2. 拦截加密参数（两种模式）
-
-**模式 A: `$return()` - 快速拦截（可被 try-catch 捕获）**
-```python
-result = ctx.evaluate("""
-    const originalEncrypt = CryptoLib.encrypt;
-    CryptoLib.encrypt = function(plaintext, key) {
-        $return({ plaintext, key });  # 返回密钥
-    };
-    login('admin', 'password');
-""")
-print(f"密钥: {result['key']}")
-```
-
-**模式 B: `$terminate()` - 强制终止（无法被 try-catch 捕获）⭐ 新增**
-```python
-ctx.clear_hook_data()
-try:
-    ctx.evaluate("""
-        const originalEncrypt = CryptoLib.encrypt;
-        CryptoLib.encrypt = function(plaintext, key) {
-            $terminate({ plaintext, key });  // 强制终止，绕过 try-catch
-        };
-        try {
-            login('admin', 'password');
-        } catch (e) {
-            // ❌ 不会执行 - $terminate 无法被捕获
-        }
-    """)
-except:
-    pass
-
-hook_data = ctx.get_hook_data()
-data = json.loads(hook_data)
-print(f"密钥: {data['key']}")
-```
-
-### 3. 监控属性访问
-```python
 ctx.evaluate("""
-    $proxyGlobal('navigator', { name: 'Nav' });
-    checkBrowser();  // 执行检测脚本
-    const logs = $getProxyLogs({ target: 'Nav' });
-    console.log('访问:', logs);
+    setTimeout(() => {}, 100);  // [API] setTimeout([Function], 100)
+    crypto.randomUUID();        // [API] randomUUID()
+    atob('test');               // [API] atob(test)
 """)
+# 日志输出到 stderr
 ```
 
-### 4. 多线程并行
-```python
-def process(data):
-    ctx = never_jscore.Context()
-    result = ctx.call("encrypt", [data])
-    del ctx
-    return result
+### 8. 扩展模式对比（v2.5.1+）
 
-with ThreadPoolExecutor(max_workers=4) as executor:
-    results = list(executor.map(process, data_list))
+```python
+# 测试三种模式的性能和内存
+# test_extension_modes_comparison.py
+
+# 纯净模式 - 最快初始化，最小内存
+ctx = never_jscore.Context(enable_extensions=False)
+# 初始化: ~16ms, 内存: ~2.5MB
+
+# Web API 模式 - 默认，平衡
+ctx = never_jscore.Context()
+# 初始化: ~16ms, 内存: ~3MB
+
+# Node.js 模式 - 完整功能
+ctx = never_jscore.Context(enable_node_compat=True)
+# 初始化: ~180ms, 内存: ~7MB
+
+# 关键发现: 运行时性能差异 <8%，主要差异在初始化
 ```
 
 ---
 
-## 测试覆盖的核心功能
+## 测试覆盖
 
-### 浏览器环境模拟
-- ✅ Deno 特征隐藏
-- ✅ 浏览器全局对象完整
-- ✅ 函数显示为 [native code]
-- ✅ Chrome 浏览器特征
+### ✅ JavaScript 核心
+- Promise/async/await
+- setTimeout/setInterval
+- 事件循环（微任务/宏任务）
 
-### 逆向工程工具 ⭐ 新增强
-- ✅ Proxy 日志监控
-- ✅ Hook 拦截系统（双模式）
-  - `$return()` - 快速拦截
-  - `$terminate()` - **V8 强制终止，无法被 try-catch 捕获** ⭐
-- ✅ 确定性随机数
+### ✅ Web API
+- fetch/XMLHttpRequest
+- crypto (getRandomValues, randomUUID, subtle)
+- URL/URLSearchParams
+- TextEncoder/TextDecoder
+- Blob/File
+- Streams API
+- localStorage/sessionStorage
+- performance API
 
-### 现代 JavaScript
-- ✅ Promise/async/await
-- ✅ setTimeout/setInterval
-- ✅ fetch/XMLHttpRequest
-- ✅ 完整的事件循环
+### ✅ Node.js 兼容
+- require() 函数
+- Node.js 内置模块 (path, fs, crypto, buffer 等)
+- npm 包加载 (jsdom, lodash 等)
+- package.json exports 解析
 
-### 性能和稳定性
-- ✅ Context 管理最佳实践
-- ✅ 多线程支持
-- ✅ 内存优化
-- ✅ 性能调优
+### ✅ 逆向工程
+- Hook 拦截 ($return, $terminate)
+- 确定性随机数
+- 反检测保护
+
+### ✅ 性能与稳定性
+- Context 生命周期管理
+- 多线程支持
+- 内存优化
+- V8 堆监控
+
+---
+
+## 常见问题
+
+### Q: 为什么循环中用 `with` 会崩溃？
+A: 每次创建 Context 会累积 HandleScope，10-20 次后崩溃。应该复用 Context。
+
+### Q: `$return()` 和 `$terminate()` 有什么区别？
+A: `$return()` 使用 throw Error，可被 try-catch 捕获；`$terminate()` 使用 V8 terminate_execution，无法被捕获，适合对抗加固代码。
+
+### Q: 如何使用 npm 包？
+A: 启用 `enable_node_compat=True`，然后在项目目录下运行 `npm install <package>`。
+
+### Q: 如何调试内存泄漏？
+A: 使用 `ctx.get_heap_statistics()` 监控内存，用 `ctx.take_heap_snapshot()` 导出快照在 Chrome DevTools 中分析。
+
+### Q: 应该选择哪种扩展模式？
+A:
+- **纯净模式** (`enable_extensions=False`): 不需要 Web API，最快最小
+- **Web API 模式** (默认): 需要 fetch/crypto/localStorage 等
+- **Node.js 模式** (`enable_node_compat=True`): 需要 require() 和 npm 包
+
+运行 `test_extension_modes_comparison.py` 查看详细对比。
 
 ---
 
 ## 贡献测试
 
-欢迎贡献更多测试用例！
-
-### 添加新测试：
-1. 在 `tests/` 创建 `test_*.py`
-2. 遵循现有测试风格
-3. 在 `run_all_tests.py` 中添加
-4. 确保可以独立运行
-5. 提交 PR
-
----
+欢迎添加新测试用例！请遵循现有测试风格。
 
 ## 许可证
 
-MIT License - 详见项目根目录的 LICENSE 文件
+MIT License

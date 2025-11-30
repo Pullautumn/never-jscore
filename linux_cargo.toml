@@ -52,28 +52,28 @@ node_compat = [
 deno_core = "0.371.0"
 
 
-deno_webidl = { path = "/home/never-jscore/deno/ext/webidl", optional = true }
-deno_web = { path = "/home/never-jscore/deno/ext/web", optional = true }
-deno_crypto = { path = "/home/never-jscore/deno/ext/crypto", optional = true }
-deno_fetch = { path = "/home/never-jscore/deno/ext/fetch", optional = true }
-deno_net = { path = "/home/never-jscore/deno/ext/net", optional = true }
-deno_tls = { path = "/home/never-jscore/deno/ext/tls", optional = true }
-deno_webstorage = { path = "/home/never-jscore/deno/ext/webstorage", optional = true }
-deno_permissions = { path = "/home/never-jscore/deno/runtime/permissions", optional = true }
-deno_features = { path = "/home/never-jscore/deno/runtime/features", optional = true }
+deno_webidl = { path = "/home/deno/ext/webidl", optional = true }
+deno_web = { path = "/home/deno/ext/web", optional = true }
+deno_crypto = { path = "/home/deno/ext/crypto", optional = true }
+deno_fetch = { path = "/home/deno/ext/fetch", optional = true }
+deno_net = { path = "/home/deno/ext/net", optional = true }
+deno_tls = { path = "/home/deno/ext/tls", optional = true }
+deno_webstorage = { path = "/home/deno/ext/webstorage", optional = true }
+deno_permissions = { path = "/home/deno/runtime/permissions", optional = true }
+deno_features = { path = "/home/deno/runtime/features", optional = true }
 deno_error = { version = "0.7.0", optional = true }
 sys_traits = { version = "0.1.17", features = ["libc", "real", "winapi"], optional = true }
 
 # Node.js 兼容层依赖（按 deno 为准）
-deno_node = { path = "/home/never-jscore/deno/ext/node", optional = true }
-deno_fs = { path = "/home/never-jscore/deno/ext/fs", optional = true }
-deno_io = { path = "/home/never-jscore/deno/ext/io", optional = true }
-deno_os = { path = "/home/never-jscore/deno/ext/os", optional = true }
-deno_process = { path = "/home/never-jscore/deno/ext/process", optional = true }
-node_resolver = { path = "/home/never-jscore/deno/libs/node_resolver", optional = true }
-deno_package_json = { path = "/home/never-jscore/deno/libs/package_json", optional = true }
-deno_maybe_sync = { path = "/home/never-jscore/deno/libs/maybe_sync", optional = true }
-deno_crypto_provider = { path = "/home/never-jscore/deno/libs/crypto", optional = true }
+deno_node = { path = "/home/deno/ext/node", optional = true }
+deno_fs = { path = "/home/deno/ext/fs", optional = true }
+deno_io = { path = "/home/deno/ext/io", optional = true }
+deno_os = { path = "/home/deno/ext/os", optional = true }
+deno_process = { path = "/home/deno/ext/process", optional = true }
+node_resolver = { path = "/home/deno/libs/node_resolver", optional = true }
+deno_package_json = { path = "/home/deno/libs/package_json", optional = true }
+deno_maybe_sync = { path = "/home/deno/libs/maybe_sync", optional = true }
+deno_crypto_provider = { path = "/home/deno/libs/crypto", optional = true }
 
 # Python bindings
 pyo3 = { version = "0.27.1", features = ["extension-module", "abi3-py38"] }
@@ -110,5 +110,5 @@ windows-sys = { version = "0.59.0", features = [
 ] }
 
 [patch.crates-io]
-v8 = { path = "/home/rusty_v8" }  # 替换为实际路径，例如 /home/never-jscore/rusty_v8
+v8 = { path = "/home/rusty_v8" }  # 替换为实际路径，例如 /home/rusty_v8
 

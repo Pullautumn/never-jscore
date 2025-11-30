@@ -160,8 +160,30 @@ globalThis.FormData = formDataModule.FormData;
 import * as webStorageModule from 'ext:deno_webstorage/01_webstorage.js';
 
 globalThis.Storage = webStorageModule.Storage;
-globalThis.localStorage = webStorageModule.localStorage;
-globalThis.sessionStorage = webStorageModule.sessionStorage;
+
+// Create storage instances (deno_webstorage exports factory functions)
+// localStorage and sessionStorage from deno are factory functions that need to be called
+if (typeof webStorageModule.localStorage === 'function') {
+    try {
+        globalThis.localStorage = webStorageModule.localStorage();
+    } catch (e) {
+        // Fallback: try to use as-is
+        globalThis.localStorage = webStorageModule.localStorage;
+    }
+} else {
+    globalThis.localStorage = webStorageModule.localStorage;
+}
+
+if (typeof webStorageModule.sessionStorage === 'function') {
+    try {
+        globalThis.sessionStorage = webStorageModule.sessionStorage();
+    } catch (e) {
+        // Fallback: try to use as-is
+        globalThis.sessionStorage = webStorageModule.sessionStorage;
+    }
+} else {
+    globalThis.sessionStorage = webStorageModule.sessionStorage;
+}
 
 // ============================================================================
 // never_jscore custom APIs (hook interception)

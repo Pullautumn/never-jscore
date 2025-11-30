@@ -312,6 +312,13 @@ impl Context {
     /// # DRY Improvement
     /// This eliminates code duplication between exec_script() and execute_js()
     fn load_js_extensions(&self, runtime: &mut JsRuntime) -> Result<()> {
+        // Set logging flag before loading protection extension
+        if self.logging_enabled {
+            runtime
+                .execute_script("<set_logging>", "globalThis.__NEVER_JSCORE_LOGGING__ = true;".to_string())
+                .map_err(|e| anyhow!("Failed to set logging flag: {}", format_error(e.into())))?;
+        }
+
         // Load core extension functions ($return, $exit, etc.)
         let core_init = crate::ext::core::get_init_js();
         runtime

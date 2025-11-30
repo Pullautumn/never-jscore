@@ -48,24 +48,89 @@
     }
 
     // ========================================================================
-    // Step 3: Native code protection - Unified implementation
+    // Step 3: Logging system (if enabled)
+    // ========================================================================
+    const loggingEnabled = typeof globalThis.__NEVER_JSCORE_LOGGING__ !== 'undefined' &&
+                          globalThis.__NEVER_JSCORE_LOGGING__;
+
+    // Get Deno core ops for logging
+    const denoCore = globalThis.__deno_internal__ || globalThis.Deno;
+    const logOp = denoCore?.core?.ops?.op_log;
+
+    /**
+     * Log API call to Rust side (if logging enabled)
+     */
+    function logAPICall(apiName, args) {
+        if (!loggingEnabled || !logOp) return;
+
+        try {
+            // Format arguments safely
+            const argsStr = Array.from(args).map((arg) => {
+                if (arg === null) return 'null';
+                if (arg === undefined) return 'undefined';
+                if (typeof arg === 'function') return '[Function]';
+                if (typeof arg === 'object') {
+                    try {
+                        // Limit object depth
+                        const str = JSON.stringify(arg);
+                        return str.length > 100 ? str.substring(0, 100) + '...' : str;
+                    } catch {
+                        return '[Object]';
+                    }
+                }
+                const str = String(arg);
+                return str.length > 50 ? str.substring(0, 50) + '...' : str;
+            }).join(', ');
+
+            logOp(`[API] ${apiName}(${argsStr})`);
+        } catch (e) {
+            // Silently ignore logging errors
+        }
+    }
+
+    // ========================================================================
+    // Step 4: Native code protection - Unified implementation
     // ========================================================================
     const protectedFunctions = new WeakSet();
+    const originalFunctions = new WeakMap(); // Store original for internal use
     const nativeCodeString = (name) => `function ${name || ''}() { [native code] }`;
 
     /**
-     * Make a function appear as native code
+     * Make a function appear as native code with optional logging
      * Uses defineProperty approach (more reliable than Proxy)
      */
-    function makeNative(fn, name) {
+    function makeNative(fn, name, enableLogging = false) {
         if (!fn || typeof fn !== 'function') return fn;
         if (protectedFunctions.has(fn)) return fn;
 
         const targetName = name || fn.name || 'anonymous';
+        let wrappedFn = fn;
+
+        // Wrap with logging if enabled
+        if (enableLogging && loggingEnabled) {
+            const originalFn = fn;
+            wrappedFn = function(...args) {
+                logAPICall(targetName, args);
+                return originalFn.apply(this, args);
+            };
+
+            // Store original function
+            originalFunctions.set(wrappedFn, originalFn);
+
+            // Copy length property
+            try {
+                originalDefineProperty(wrappedFn, 'length', {
+                    value: originalFn.length,
+                    writable: false,
+                    enumerable: false,
+                    configurable: true
+                });
+            } catch (e) {}
+        }
 
         try {
             // Override toString
-            originalDefineProperty(fn, 'toString', {
+            originalDefineProperty(wrappedFn, 'toString', {
                 value: function() {
                     return nativeCodeString(targetName);
                 },
@@ -74,22 +139,20 @@
                 configurable: true
             });
 
-            // Fix name if needed
-            if (name && fn.name !== name) {
-                originalDefineProperty(fn, 'name', {
-                    value: name,
-                    writable: false,
-                    enumerable: false,
-                    configurable: true
-                });
-            }
+            // Fix name
+            originalDefineProperty(wrappedFn, 'name', {
+                value: targetName,
+                writable: false,
+                enumerable: false,
+                configurable: true
+            });
 
-            protectedFunctions.add(fn);
+            protectedFunctions.add(wrappedFn);
         } catch (e) {
             // Some built-in functions can't be modified
         }
 
-        return fn;
+        return wrappedFn;
     }
 
     /**
@@ -225,24 +288,16 @@
         'Console',
     ];
 
-    const globalFunctions = [
-        // Base64
-        'atob', 'btoa',
-
-        // Timers
+    // Functions with logging enabled (key APIs to monitor)
+    const globalFunctionsWithLogging = [
         'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
-        'queueMicrotask',
+        'queueMicrotask', 'fetch', 'atob', 'btoa',
+    ];
 
-        // Fetch
-        'fetch',
-
-        // Events
+    // Functions without logging (less important)
+    const globalFunctionsNoLogging = [
         'addEventListener', 'removeEventListener', 'dispatchEvent', 'reportError',
-
-        // Structured Clone
         'structuredClone',
-
-        // never_jscore hooks (make them look native too)
         '$return', '$exit', '$terminate', '$storeResult',
         '__neverjscore_return__', '__saveAndTerminate__', '__getDeno',
     ];
@@ -256,32 +311,56 @@
         }
     }
 
-    // Protect functions
-    for (const funcName of globalFunctions) {
+    // Protect functions with logging
+    for (const funcName of globalFunctionsWithLogging) {
         if (typeof globalThis[funcName] === 'function') {
             try {
-                makeNative(globalThis[funcName], funcName);
+                const originalFn = globalThis[funcName];
+                const wrappedFn = makeNative(originalFn, funcName, true); // Enable logging
+                if (wrappedFn !== originalFn) {
+                    globalThis[funcName] = wrappedFn;
+                }
             } catch (e) {}
         }
     }
 
-    // Protect crypto object methods
+    // Protect functions without logging
+    for (const funcName of globalFunctionsNoLogging) {
+        if (typeof globalThis[funcName] === 'function') {
+            try {
+                makeNative(globalThis[funcName], funcName, false);
+            } catch (e) {}
+        }
+    }
+
+    // Protect crypto object methods with logging
     if (typeof crypto !== 'undefined') {
-        makeNative(crypto.getRandomValues, 'getRandomValues');
-        makeNative(crypto.randomUUID, 'randomUUID');
+        if (typeof crypto.getRandomValues === 'function') {
+            const original = crypto.getRandomValues;
+            const wrapped = makeNative(original.bind(crypto), 'getRandomValues', true);
+            crypto.getRandomValues = wrapped;
+        }
+        if (typeof crypto.randomUUID === 'function') {
+            const original = crypto.randomUUID;
+            const wrapped = makeNative(original.bind(crypto), 'randomUUID', true);
+            crypto.randomUUID = wrapped;
+        }
+
         if (crypto.subtle) {
             const subtleMethods = ['encrypt', 'decrypt', 'sign', 'verify', 'digest',
                 'generateKey', 'deriveKey', 'deriveBits', 'importKey', 'exportKey',
                 'wrapKey', 'unwrapKey'];
             for (const method of subtleMethods) {
                 if (typeof crypto.subtle[method] === 'function') {
-                    makeNative(crypto.subtle[method], method);
+                    const original = crypto.subtle[method];
+                    const wrapped = makeNative(original.bind(crypto.subtle), method, true);
+                    crypto.subtle[method] = wrapped;
                 }
             }
         }
     }
 
-    // Protect console methods
+    // Protect console methods (no logging to avoid recursion)
     if (typeof console !== 'undefined') {
         const consoleMethods = ['log', 'info', 'warn', 'error', 'debug', 'trace',
             'dir', 'dirxml', 'table', 'count', 'countReset', 'group', 'groupCollapsed',
@@ -289,18 +368,20 @@
             'profileEnd', 'timeStamp'];
         for (const method of consoleMethods) {
             if (typeof console[method] === 'function') {
-                makeNative(console[method], method);
+                makeNative(console[method], method, false);
             }
         }
     }
 
-    // Protect performance methods
+    // Protect performance methods with logging
     if (typeof performance !== 'undefined') {
         const perfMethods = ['now', 'mark', 'measure', 'clearMarks', 'clearMeasures',
             'getEntries', 'getEntriesByName', 'getEntriesByType', 'toJSON'];
         for (const method of perfMethods) {
             if (typeof performance[method] === 'function') {
-                makeNative(performance[method], method);
+                const original = performance[method];
+                const wrapped = makeNative(original.bind(performance), method, true);
+                performance[method] = wrapped;
             }
         }
     }
