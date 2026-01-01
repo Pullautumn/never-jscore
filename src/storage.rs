@@ -1,12 +1,20 @@
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
-/// 全局 Hook 数据存储
+/// Worker ID - 用于在 OpState 中标识当前 Worker
+///
+/// 在 Worker Pool 场景下，每个 Worker 在创建 JsRuntime 时会将自己的 ID
+/// 存入 OpState，这样 hook op 就能知道是哪个 Worker 触发的 hook。
+#[derive(Clone, Copy, Debug)]
+pub struct WorkerId(pub usize);
+
+/// 全局 Hook 数据存储 - 按Worker ID分别存储
 ///
 /// 在调用 terminate_execution() 前保存 Hook 拦截的数据。
-/// 使用全局静态变量确保数据在 V8 isolate 终止后仍然可访问。
-static HOOK_DATA: Lazy<Arc<Mutex<Option<String>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+/// 使用全局静态HashMap，每个Worker有独立的存储空间，避免数据竞争。
+static HOOK_DATA: Lazy<Arc<Mutex<HashMap<usize, String>>>> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 /// JavaScript 执行结果存储
 ///
@@ -71,25 +79,56 @@ impl Default for ResultStorage {
 /// 保存 Hook 拦截的数据到全局存储
 ///
 /// 这个函数在 JS 调用 __saveAndTerminate__() 时被调用，
-/// 数据会保存到全局变量中，即使 V8 isolate 被终止也能访问。
-pub fn save_hook_data(data: String) {
-    let mut guard = HOOK_DATA.lock().unwrap();
-    *guard = Some(data);
-}
-
-/// 获取保存的 Hook 数据
+/// 数据会保存到对应Worker ID的存储空间中，即使 V8 isolate 被终止也能访问。
 ///
-/// 从全局存储中读取之前保存的 Hook 数据。
-/// 通常在 JS 被 terminate_execution() 终止后调用。
-pub fn get_hook_data() -> Option<String> {
-    let guard = HOOK_DATA.lock().unwrap();
-    guard.clone()
+/// # Arguments
+/// * `worker_id` - Worker的唯一标识符
+/// * `data` - 要保存的Hook数据（JSON字符串）
+pub fn save_hook_data_for_worker(worker_id: usize, data: String) {
+    let mut guard = HOOK_DATA.lock().unwrap();
+    guard.insert(worker_id, data);
 }
 
-/// 清空保存的 Hook 数据
+/// 获取指定Worker保存的 Hook 数据
+///
+/// 从全局存储中读取特定Worker保存的 Hook 数据。
+/// 通常在 JS 被 terminate_execution() 终止后调用。
+///
+/// # Arguments
+/// * `worker_id` - Worker的唯一标识符
+pub fn get_hook_data_for_worker(worker_id: usize) -> Option<String> {
+    let guard = HOOK_DATA.lock().unwrap();
+    guard.get(&worker_id).cloned()
+}
+
+/// 清空指定Worker保存的 Hook 数据
 ///
 /// 在开始新的 JS 执行前调用，避免读取到旧数据。
-pub fn clear_hook_data() {
+///
+/// # Arguments
+/// * `worker_id` - Worker的唯一标识符
+pub fn clear_hook_data_for_worker(worker_id: usize) {
     let mut guard = HOOK_DATA.lock().unwrap();
-    *guard = None;
+    guard.remove(&worker_id);
+}
+
+/// 保存 Hook 拦截的数据到全局存储（Context API兼容）
+///
+/// 为了向后兼容Context API，使用特殊的worker_id = 0
+pub fn save_hook_data(data: String) {
+    save_hook_data_for_worker(0, data);
+}
+
+/// 获取保存的 Hook 数据（Context API兼容）
+///
+/// 为了向后兼容Context API，从worker_id = 0读取
+pub fn get_hook_data() -> Option<String> {
+    get_hook_data_for_worker(0)
+}
+
+/// 清空保存的 Hook 数据（Context API兼容）
+///
+/// 为了向后兼容Context API，清空worker_id = 0
+pub fn clear_hook_data() {
+    clear_hook_data_for_worker(0);
 }

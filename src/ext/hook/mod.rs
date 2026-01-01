@@ -1,16 +1,23 @@
 use deno_core::{extension, Extension, OpState};
 use super::ExtensionTrait;
 
-use crate::storage::{save_hook_data, get_hook_data, clear_hook_data};
+use crate::storage::{save_hook_data, save_hook_data_for_worker, WorkerId, get_hook_data, clear_hook_data};
 
 /// Op: Save Hook intercepted data to global storage (new version, used with terminate_execution)
 ///
 /// Save data before calling op_terminate_execution.
-/// Data is saved to global static variable, accessible even after isolate termination.
+/// Data is saved to global static HashMap, keyed by worker_id for thread safety.
 #[deno_core::op2]
 #[string]
-pub fn op_save_hook_data(#[string] data: String) -> String {
-    save_hook_data(data.clone());
+pub fn op_save_hook_data(state: &mut OpState, #[string] data: String) -> String {
+    // 尝试从 OpState 获取 WorkerId（Worker Pool 场景）
+    if let Some(worker_id) = state.try_borrow::<WorkerId>() {
+        // Worker Pool 场景：使用 worker_id 作为 key
+        save_hook_data_for_worker(worker_id.0, data.clone());
+    } else {
+        // Context 场景：使用默认的 worker_id = 0
+        save_hook_data(data.clone());
+    }
     data
 }
 

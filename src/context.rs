@@ -16,6 +16,22 @@ use crate::storage::ResultStorage;
 #[cfg(feature = "deno_web_api")]
 use crate::permissions::create_allow_all_permissions;
 
+/// 包装裸指针以绕过Send约束
+///
+/// 这是安全的，因为：
+/// 1. allow_threads不会spawn新线程，只是释放GIL
+/// 2. JavaScript代码仍然在当前线程上执行
+/// 3. V8 Isolate不会被跨线程访问
+struct SendPtr<T>(*const T);
+unsafe impl<T> Send for SendPtr<T> {}
+
+impl<T> SendPtr<T> {
+    #[inline]
+    unsafe fn as_ref(&self) -> &T {
+        &*self.0
+    }
+}
+
 #[cfg(feature = "deno_web_api")]
 deno_core::extension!(
     deno_web_init,
@@ -789,10 +805,14 @@ impl Context {
     ///     result = ctx.call("add", [5, 3])
     ///     ```
     #[pyo3(signature = (code))]
-    pub fn compile(&self, code: String) -> PyResult<()> {
-        // 直接调用 exec_script，不经过 eval
-        self.exec_script(&code)
-            .map_err(|e| PyException::new_err(format!("Compile error: {}", e)))?;
+    pub fn compile(&self, py: Python, code: String) -> PyResult<()> {
+        // 使用SendPtr绕过Send约束，释放GIL提升多线程性能
+        // 这是安全的，因为allow_threads不会跨线程执行代码，只是释放GIL
+        let self_ptr = SendPtr(self as *const Context);
+        py.allow_threads(move || {
+            let ctx = unsafe { self_ptr.as_ref() };
+            ctx.exec_script(&code)
+        }).map_err(|e| PyException::new_err(format!("Compile error: {}", e)))?;
         Ok(())
     }
 
@@ -813,6 +833,7 @@ impl Context {
         args: &Bound<'_, PyAny>,
         auto_await: Option<bool>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        // 准备参数（在持有GIL时）
         let json_args = if args.is_instance_of::<PyList>() {
             let list = args.downcast::<PyList>()?;
             let mut vec_args = Vec::with_capacity(list.len());
@@ -831,10 +852,14 @@ impl Context {
         let args_str = args_json.join(", ");
         let call_code = format!("{}({})", name, args_str);
 
-        let result_json = self
-            .execute_js(&call_code, auto_await.unwrap_or(true))
-            .map_err(|e| PyException::new_err(format!("Call error: {}", e)))?;
+        // 释放GIL执行JavaScript（提升多线程性能）
+        let self_ptr = SendPtr(self as *const Context);
+        let result_json = py.allow_threads(move || {
+            let ctx = unsafe { self_ptr.as_ref() };
+            ctx.execute_js(&call_code, auto_await.unwrap_or(true))
+        }).map_err(|e| PyException::new_err(format!("Call error: {}", e)))?;
 
+        // 转换结果（在持有GIL时）
         let result: JsonValue = serde_json::from_str(&result_json)
             .map_err(|e| PyException::new_err(format!("JSON parse error: {}", e)))?;
 
@@ -869,19 +894,24 @@ impl Context {
         auto_await: Option<bool>,
     ) -> PyResult<Bound<'py, PyAny>> {
         if return_value {
-            // 需要返回值：使用包装的execute_js
-            let result_json = self
-                .execute_js(&code, auto_await.unwrap_or(true))
-                .map_err(|e| PyException::new_err(format!("Eval error: {}", e)))?;
+            // 需要返回值：使用包装的execute_js，释放GIL
+            let self_ptr = SendPtr(self as *const Context);
+            let result_json = py.allow_threads(move || {
+                let ctx = unsafe { self_ptr.as_ref() };
+                ctx.execute_js(&code, auto_await.unwrap_or(true))
+            }).map_err(|e| PyException::new_err(format!("Eval error: {}", e)))?;
 
             let result: JsonValue = serde_json::from_str(&result_json)
                 .map_err(|e| PyException::new_err(format!("JSON parse error: {}", e)))?;
 
             json_to_python(py, &result)
         } else {
-            // 不需要返回值：直接执行脚本，加入全局作用域
-            self.exec_script(&code)
-                .map_err(|e| PyException::new_err(format!("Eval error: {}", e)))?;
+            // 不需要返回值：直接执行脚本，释放GIL
+            let self_ptr = SendPtr(self as *const Context);
+            py.allow_threads(move || {
+                let ctx = unsafe { self_ptr.as_ref() };
+                ctx.exec_script(&code)
+            }).map_err(|e| PyException::new_err(format!("Eval error: {}", e)))?;
 
             Ok(py.None().into_bound(py))
         }
@@ -904,9 +934,12 @@ impl Context {
         code: String,
         auto_await: Option<bool>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let result_json = self
-            .execute_js(&code, auto_await.unwrap_or(true))
-            .map_err(|e| PyException::new_err(format!("Evaluate error: {}", e)))?;
+        // 释放GIL执行JavaScript（提升多线程性能）
+        let self_ptr = SendPtr(self as *const Context);
+        let result_json = py.allow_threads(move || {
+            let ctx = unsafe { self_ptr.as_ref() };
+            ctx.execute_js(&code, auto_await.unwrap_or(true))
+        }).map_err(|e| PyException::new_err(format!("Evaluate error: {}", e)))?;
 
         let result: JsonValue = serde_json::from_str(&result_json)
             .map_err(|e| PyException::new_err(format!("JSON parse error: {}", e)))?;

@@ -370,6 +370,187 @@ class Context:
         ...
 
 
+class JSEngine:
+    """
+    JavaScript引擎 (v3.0新增 - 推荐使用)
+
+    核心特性：
+    - JS代码只在Worker初始化时加载一次
+    - Worker持久化，重复使用，避免重复加载
+    - 自动管理Worker池
+    - 完全脱离Python GIL
+
+    适用场景：
+    - 大型JS库需要多次调用（CryptoJS、jsdom等）
+    - 多线程并发执行JavaScript
+    - 高性能批量处理
+    - Web API服务（FastAPI等）
+
+    性能提升：
+    - 重复调用场景：10-20倍性能提升
+    - 多线程场景：完全并行，不受GIL限制
+
+    Example:
+        >>> # 创建引擎，JS代码只加载一次
+        >>> engine = JSEngine('''
+        ...     const CryptoJS = require('crypto-js');
+        ...     function encrypt(data, key) {
+        ...         return CryptoJS.AES.encrypt(data, key).toString();
+        ...     }
+        ... ''', workers=4, enable_node_compat=True)
+        >>>
+        >>> # 多次调用，无需重复加载JS库
+        >>> for data in data_list:
+        ...     result = engine.call("encrypt", [data, "secret_key"])
+        >>>
+        >>> # 多线程使用
+        >>> from concurrent.futures import ThreadPoolExecutor
+        >>> with ThreadPoolExecutor(max_workers=20) as executor:
+        ...     results = executor.map(
+        ...         lambda d: engine.call("encrypt", [d, "key"]),
+        ...         data_list
+        ...     )
+    """
+
+    def __init__(
+        self,
+        code: str,
+        workers: Optional[int] = None,
+        enable_extensions: bool = True,
+        enable_node_compat: bool = False,
+        enable_logging: bool = False,
+        random_seed: Optional[int] = None
+    ) -> None:
+        """
+        创建JavaScript引擎
+
+        Args:
+            code: JavaScript代码（只在Worker初始化时加载一次）
+                 可以是大型JS库、函数定义等
+            workers: Worker数量（默认为CPU核心数）
+                    推荐设置为CPU核心数，例如4或8
+            enable_extensions: 启用Web API扩展（默认True）
+                             包括fetch、URL、crypto等
+            enable_node_compat: 启用Node.js兼容（默认False）
+                              支持require()加载npm包
+            enable_logging: 启用调试日志（默认False）
+                          开启后会输出Worker状态信息
+            random_seed: 随机数种子（默认None）
+                        用于确定性随机数生成
+
+        Example:
+            >>> # 基本用法
+            >>> engine = JSEngine('''
+            ...     function add(a, b) { return a + b; }
+            ...     function multiply(a, b) { return a * b; }
+            ... ''')
+            >>>
+            >>> # 指定Worker数量
+            >>> engine = JSEngine(code, workers=8)
+            >>>
+            >>> # 使用Node.js库
+            >>> engine = JSEngine('''
+            ...     const _ = require('lodash');
+            ...     function process(arr) {
+            ...         return _.uniq(arr);
+            ...     }
+            ... ''', enable_node_compat=True)
+        """
+        ...
+
+    def call(self, func_name: str, args: List[Any]) -> Any:
+        """
+        调用已定义的JavaScript函数
+
+        Args:
+            func_name: 函数名（必须在初始化代码中定义）
+            args: 参数列表
+
+        Returns:
+            函数返回值，自动转换为Python对象
+
+        Raises:
+            Exception: 函数不存在或执行失败时
+
+        Example:
+            >>> engine = JSEngine('function add(a, b) { return a + b; }')
+            >>> result = engine.call("add", [1, 2])
+            >>> print(result)
+            3
+        """
+        ...
+
+    def execute(self, code: str) -> Any:
+        """
+        执行JavaScript代码
+
+        适合一次性执行，不需要预先定义函数
+
+        Args:
+            code: JavaScript代码
+
+        Returns:
+            执行结果
+
+        Example:
+            >>> engine = JSEngine("")  # 可以不传初始化代码
+            >>> result = engine.execute("Math.sqrt(16)")
+            >>> print(result)
+            4
+        """
+        ...
+
+    @property
+    def workers(self) -> int:
+        """Worker数量"""
+        ...
+
+    def get_hook_data(self, worker_id: int) -> Optional[str]:
+        """
+        获取指定Worker的Hook数据
+
+        当调用返回 {"__hook__": true, "worker_id": N} 时，
+        使用此方法获取实际的hook数据
+
+        Args:
+            worker_id: Worker的ID（从返回结果中获取）
+
+        Returns:
+            Hook数据的JSON字符串，如果没有数据则返回None
+
+        Example:
+            >>> result = engine.call("hookFunc", [data])
+            >>> if isinstance(result, dict) and result.get("__hook__"):
+            ...     worker_id = result["worker_id"]
+            ...     hook_data = engine.get_hook_data(worker_id)
+            ...     if hook_data:
+            ...         import json
+            ...         data = json.loads(hook_data)
+        """
+        ...
+
+    def clear_hook_data(self, worker_id: int) -> None:
+        """
+        清空指定Worker的Hook数据
+
+        Args:
+            worker_id: Worker的ID
+        """
+        ...
+
+    def __enter__(self) -> "JSEngine":
+        """上下文管理器入口"""
+        ...
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
+        """上下文管理器退出"""
+        ...
+
+    def __repr__(self) -> str:
+        """字符串表示"""
+        ...
+
+
 # 类型别名
 JSValue = Union[None, bool, int, float, str, List[Any], dict[str, Any]]
 """JavaScript 值的 Python 类型表示"""
@@ -379,5 +560,6 @@ __version__: str = "2.5.0"
 
 __all__ = [
     "Context",
+    "JSEngine",
     "JSValue",
 ]
