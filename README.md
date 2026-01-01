@@ -98,7 +98,8 @@ never_jscore 提供两种执行模式，适应不同场景：
 **JSEngine 优势场景**：
 - 每次执行不同的 JS 代码（无法复用 Context）
 - 避免重复加载大型 JS 库（冷启动优化）
-
+- 多线程使用例子[test_engine.py](tests/test_engine.py),[test_multithreading.py](tests/test_multithreading.py),
+- 不同使用情况下测速[test_performance_comparison.py](tests/test_performance_comparison.py)
 #### Context 模式示例
 
 ```python
@@ -906,6 +907,8 @@ python tests/run_all_tests.py
   - Worker 级别的 hook 数据隔离，无数据竞争
   - Hook 数据直接返回，消除竞态条件
   - 自动 Worker 池管理和任务调度
+  - 多线程使用例子[test_engine.py](tests/test_engine.py),[test_multithreading.py](tests/test_multithreading.py),
+  - 不同使用情况下测速[test_performance_comparison.py](tests/test_performance_comparison.py)
 
 - ⚡ **Context GIL 释放优化** ⭐ 最重要的性能提升
   - 所有方法（`compile`, `call`, `eval`, `evaluate`）现在都会释放 GIL
@@ -919,7 +922,7 @@ python tests/run_all_tests.py
 
 - 📖 **性能真相揭秘**
   - **Context 复用** 快 50-340 倍（相比 JSEngine）
-  - 新增 [PERFORMANCE_GUIDE.md](PERFORMANCE_GUIDE.md) 详细分析
+  - [UVICORN_WORKERS_EXPLAINED.md](docs/UVICORN_WORKERS_EXPLAINED.md) fastapi多进程测试报告
   - 更新最佳实践建议：默认使用 Context 复用
 
 ### v2.5.2 (2025-12-26)
@@ -946,7 +949,7 @@ python tests/run_all_tests.py
 - **性能优化指南** ⭐：[PERFORMANCE_GUIDE.md](PERFORMANCE_GUIDE.md) - Context vs JSEngine 性能真相
 - **Canvas API 参考**：[docs/CANVAS_API_REFERENCE.md](docs/CANVAS_API_REFERENCE.md)
 - **Node.js API 对比**：[NODEJS_V25_API_COMPARISON.md](NODEJS_V25_API_COMPARISON.md)
-- **多线程支持**：[docs/MULTITHREADING.md](docs/MULTITHREADING.md)
+- **多线程支持**：[UVICORN_WORKERS_EXPLAINED.md](docs/UVICORN_WORKERS_EXPLAINED.md)
 
 ### 🔗 相关项目
 
